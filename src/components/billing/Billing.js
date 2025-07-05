@@ -27,7 +27,7 @@ import {
   Tooltip,
   Descriptions
 } from 'antd';
-import { 
+import {
   PlusOutlined, 
   UserAddOutlined, 
   ShoppingCartOutlined,
@@ -45,6 +45,7 @@ import {
   PayCircleOutlined,
   InfoCircleOutlined
 } from '@ant-design/icons';
+import { fetchBranches, fetchStalls } from '../../features/storefront/storefrontSlice';
 import { 
   createOrder, 
   addToCart, 
@@ -58,40 +59,19 @@ import { fetchProducts, createProduct } from '../../features/products/productSli
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
+const { Option, OptGroup } = Select;
 const { TabPane } = Tabs;
 
-// Mitti Arts branch configuration
-const MITTI_ARTS_BRANCHES = [
-  {
-    id: 'main_showroom',
-    name: 'Main Showroom',
-    address: 'Banjara Hills, Hyderabad',
-    phone: '+91 98765 43210',
-    icon: '🏪'
-  },
-  {
-    id: 'pottery_workshop',
-    name: 'Pottery Workshop',
-    address: 'Madhapur, Hyderabad', 
-    phone: '+91 98765 43211',
-    icon: '🏺'
-  },
-  {
-    id: 'export_unit',
-    name: 'Export Unit',
-    address: 'Gachibowli, Hyderabad',
-    phone: '+91 98765 43212', 
-    icon: '📦'
-  }
-];
+
 
 const Billing = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { cart, loading, error } = useSelector(state => state.orders);
-  const { items: customers } = useSelector(state => state.customers);
-  const { items: products } = useSelector(state => state.products);
+
+const { cart, loading, error } = useSelector(state => state.orders);
+const { items: customers } = useSelector(state => state.customers);
+const { items: products } = useSelector(state => state.products);
+const { branches, stalls } = useSelector(state => state.storefront);
 
   // Core billing states
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -100,7 +80,39 @@ const Billing = () => {
   
   // Business type and branch states
   const [businessType, setBusinessType] = useState('retail'); // retail, wholesale
-  const [selectedBranch, setSelectedBranch] = useState('main_showroom');
+  const [selectedBranch, setSelectedBranch] = useState('');
+
+  // Memoize locations to avoid use-before-init and dependency issues
+  const locations = React.useMemo(() => [
+    ...branches.map(branch => ({
+      ...branch,
+      type: 'branch',
+      displayName: `🏪 ${branch.name}`,
+      locationInfo: `${branch.address?.city || 'Branch Location'}`
+    })),
+    ...stalls.map(stall => ({
+      ...stall,
+      type: 'stall',
+      displayName: `🎪 ${stall.name}`,
+      locationInfo: `${stall.location || 'Event Location'} - ${stall.eventName || 'Fair/Event'}`
+    }))
+  ], [branches, stalls]);
+
+  useEffect(() => {
+    if (locations.length > 0 && !selectedBranch) {
+      // Prioritize main branch, then any branch, then stalls
+      const mainBranch = locations.find(loc => 
+        loc.type === 'branch' && (
+          loc.isMainBranch || 
+          loc.name.toLowerCase().includes('main') ||
+          loc.name.toLowerCase().includes('showroom')
+        )
+      );
+      const anyBranch = locations.find(loc => loc.type === 'branch');
+      const defaultLocation = mainBranch || anyBranch || locations[0];
+      setSelectedBranch(defaultLocation.id);
+    }
+  }, [locations, selectedBranch]);
   const [isAdvanceBilling, setIsAdvanceBilling] = useState(false);
   const [advanceAmount, setAdvanceAmount] = useState(0);
   const [remainingAmount, setRemainingAmount] = useState(0);
@@ -123,13 +135,15 @@ const Billing = () => {
 
   const paymentMethods = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Cheque'];
 
-  useEffect(() => {
-    dispatch(fetchCustomers({}));
-    dispatch(fetchProducts({}));
-  }, [dispatch]);
+useEffect(() => {
+  dispatch(fetchCustomers({}));
+  dispatch(fetchProducts({}));
+  dispatch(fetchBranches({}));
+  dispatch(fetchStalls({}));
+}, [dispatch]);
 
-  // Get current branch info
-  const currentBranch = MITTI_ARTS_BRANCHES.find(b => b.id === selectedBranch);
+  // Get current location (branch or stall)
+  const currentLocation = locations.find(l => l.id === selectedBranch) || locations[0];
 
   // Product handling with business type pricing
   const getProductPrice = (product) => {
@@ -338,15 +352,25 @@ const Billing = () => {
   const confirmAndGenerateInvoice = async () => {
     const totals = calculateTotals();
 
-    // Remove undefined fields from branchInfo
-    const cleanBranchInfo = {};
-    if (currentBranch) {
-      Object.keys(currentBranch).forEach(key => {
-        if (currentBranch[key] !== undefined) {
-          cleanBranchInfo[key] = currentBranch[key];
-        }
-      });
-    }
+    // Create locationInfo from selected location (branch or stall)
+    const cleanLocationInfo = currentLocation ? {
+      id: currentLocation.id,
+      name: currentLocation.name,
+      type: currentLocation.type, // 'branch' or 'stall'
+      displayName: currentLocation.displayName,
+      locationInfo: currentLocation.locationInfo,
+      address: currentLocation.address || {},
+      contact: currentLocation.contact || {},
+      manager: currentLocation.manager || currentLocation.setup?.inPersonMaintainedBy || '',
+      // Additional stall-specific fields
+      ...(currentLocation.type === 'stall' && {
+        eventName: currentLocation.eventName,
+        location: currentLocation.location,
+        startDate: currentLocation.startDate,
+        endDate: currentLocation.endDate,
+        status: currentLocation.status
+      })
+    } : {};
 
     // Remove undefined fields from items
     const cleanItems = cart.map(item => {
@@ -389,7 +413,7 @@ const Billing = () => {
       customerId: selectedCustomer.id,
       businessType,
       branch: selectedBranch,
-      branchInfo: cleanBranchInfo,
+      branchInfo: cleanLocationInfo, // This now contains both branch and stall info
       isAdvanceBilling,
       advanceAmount: isAdvanceBilling ? advanceAmount : 0,
       remainingAmount: isAdvanceBilling ? remainingAmount : 0,
@@ -575,7 +599,7 @@ const Billing = () => {
               <div>
                 <Title level={4} style={{ margin: 0, color: 'white' }}>Mitti Arts - Point of Sale</Title>
                 <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '12px' }}>
-                  🏺 Handcrafted Pottery & Terracotta Art • {currentBranch.name}
+                  🏺 Handcrafted Pottery & Terracotta Art • {currentLocation?.displayName || 'Loading...'}
                 </Text>
               </div>
             </div>
@@ -583,18 +607,40 @@ const Billing = () => {
           <Col>
             <Space direction="vertical" size="small" style={{ alignItems: 'flex-end' }}>
               {/* Branch Selection */}
-              <Select
-                value={selectedBranch}
-                onChange={setSelectedBranch}
-                style={{ width: 200 }}
-                size="small"
-              >
-                {MITTI_ARTS_BRANCHES.map(branch => (
-                  <Option key={branch.id} value={branch.id}>
-                    {branch.icon} {branch.name}
-                  </Option>
-                ))}
-              </Select>
+            <Select
+              value={selectedBranch}
+              onChange={setSelectedBranch}
+              style={{ width: 220 }}
+              size="small"
+              loading={!locations.length}
+              placeholder="Select Location"
+            >
+              {locations.length > 0 ? (
+                <>
+                  {/* Group by type */}
+                  {locations.filter(loc => loc.type === 'branch').length > 0 && (
+                    <OptGroup label="🏪 Permanent Branches">
+                      {locations.filter(loc => loc.type === 'branch').map(branch => (
+                        <Option key={branch.id} value={branch.id}>
+                          🏪 {branch.name}
+                        </Option>
+                      ))}
+                    </OptGroup>
+                  )}
+                  {locations.filter(loc => loc.type === 'stall').length > 0 && (
+                    <OptGroup label="🎪 Fair Stalls & Events">
+                      {locations.filter(loc => loc.type === 'stall').map(stall => (
+                        <Option key={stall.id} value={stall.id}>
+                          🎪 {stall.name} - {stall.eventName}
+                        </Option>
+                      ))}
+                    </OptGroup>
+                  )}
+                </>
+              ) : (
+                <Option disabled>No locations available</Option>
+              )}
+            </Select>
               
               {/* Business Type Selection */}
               <Radio.Group 
@@ -966,7 +1012,8 @@ const Billing = () => {
                   {selectedCustomer.phone && (
                     <div><strong>Phone:</strong> {selectedCustomer.phone}</div>
                   )}
-                  <div><strong>Branch:</strong> {currentBranch.icon} {currentBranch.name}</div>
+                  <div><strong>Location:</strong> {currentLocation?.displayName || 'No location selected'}</div>
+                  <div><strong>Details:</strong> {currentLocation?.locationInfo || ''}</div>
                   <div><strong>Type:</strong> {businessType === 'retail' ? '🛍️ Retail' : '🏪 Wholesale'}</div>
                 </div>
               )}
@@ -1118,11 +1165,11 @@ const Billing = () => {
               </Row>
               <Row style={{ marginTop: 4 }}>
                 <Col span={8}>
-                  <Text type="secondary">Branch:</Text>
+                  <Text type="secondary">Location:</Text>
                 </Col>
                 <Col span={16}>
-                  <Tag color={currentBranch.color || '#8b4513'}>
-                    {currentBranch.icon} {currentBranch.name}
+                  <Tag color="#8b4513">
+                    {currentLocation?.displayName || 'No location'}
                   </Tag>
                 </Col>
               </Row>
