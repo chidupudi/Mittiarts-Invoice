@@ -82,16 +82,14 @@ const { TabPane } = Tabs;
 const { RangePicker } = DatePicker;
 
 
-const StoreFront = () => {
-  // Main state management
-  const [activeTab, setActiveTab] = useState('branches');
-  const [branches, setBranches] = useState([]);
-  const [stalls, setStalls] = useState([]); // Make sure this line exists
-  const [mainStore, setMainStore] = useState(null);
 
-  // Redux state (for analytics, filters, loading, error)
+const StoreFront = () => {
+  // FIXED: Use Redux state instead of local state
   const dispatch = useDispatch();
   const {
+    mainStore,
+    branches,
+    stalls,
     branchFilters,
     stallFilters,
     loading,
@@ -99,6 +97,9 @@ const StoreFront = () => {
     analytics
   } = useSelector(state => state.storefront);
 
+  // Component state for UI only
+  const [activeTab, setActiveTab] = useState('branches');
+  
   // Modal states
   const [branchModalOpen, setBranchModalOpen] = useState(false);
   const [stallModalOpen, setStallModalOpen] = useState(false);
@@ -111,7 +112,7 @@ const StoreFront = () => {
   const [stallForm] = Form.useForm();
   const [storeForm] = Form.useForm();
 
-  // Loading states
+  // Loading states for operations
   const [operationLoading, setOperationLoading] = useState(false);
 
   // Initialize data on component mount
@@ -128,10 +129,11 @@ const StoreFront = () => {
 
   const loadStoreFrontData = async () => {
     try {
+      // Use Redux actions to load data
       await Promise.all([
-        dispatch(fetchMainStore()),
-        dispatch(fetchBranches(branchFilters)),
-        dispatch(fetchStalls(stallFilters))
+        dispatch(fetchMainStore()).unwrap(),
+        dispatch(fetchBranches(branchFilters)).unwrap(),
+        dispatch(fetchStalls(stallFilters)).unwrap()
       ]);
     } catch (error) {
       message.error('Failed to load store front data');
@@ -294,12 +296,12 @@ const StoreFront = () => {
       };
 
       if (selectedStall) {
-        // Update existing stall
-        setStalls(prev => prev.map(s => s.id === selectedStall.id ? { ...stallData } : s));
+        // Update existing stall using Redux
+        await dispatch(updateStall({ id: selectedStall.id, stallData })).unwrap();
         message.success('Stall updated successfully');
       } else {
-        // Add new stall
-        setStalls(prev => [...prev, stallData]);
+        // Add new stall using Redux
+        await dispatch(createStall(stallData)).unwrap();
         message.success('Stall added successfully');
       }
 
