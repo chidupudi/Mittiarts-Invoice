@@ -6,9 +6,10 @@ import { calculateTotals } from './BillingHelpers';
 
 const { Text } = Typography;
 
+
 const OrderSummary = ({ 
-  cart, 
-  businessType, 
+  cart = [], 
+  businessType = 'retail',
   selectedCustomer,
   currentLocation,
   isAdvanceBilling,
@@ -17,14 +18,16 @@ const OrderSummary = ({
   onSubmit,
   disabled
 }) => {
-  const totals = calculateTotals(cart, businessType);
+  // Defensive: fallback to 'retail' if businessType is null/undefined/empty string
+  const safeBusinessType = businessType || 'retail';
+  const totals = calculateTotals(cart, safeBusinessType);
 
   return (
     <Card 
       title={
         <Space>
           <CalculatorOutlined />
-          <span>Order Summary - {businessType.charAt(0).toUpperCase() + businessType.slice(1)}</span>
+          <span>Order Summary - {safeBusinessType.charAt(0).toUpperCase() + safeBusinessType.slice(1)}</span>
         </Space>
       }
       size="small"
@@ -90,7 +93,7 @@ const OrderSummary = ({
           </Text>
         </Row>
 
-        {businessType === 'wholesale' && totals.currentTotal > 10000 && (
+        {safeBusinessType === 'wholesale' && totals.currentTotal > 10000 && (
           <div style={{ 
             backgroundColor: '#f6ffed', 
             border: '1px solid #b7eb8f', 
@@ -136,10 +139,10 @@ const OrderSummary = ({
           )}
           <div><strong>Location:</strong> {currentLocation?.displayName || 'No location selected'}</div>
           <div><strong>Details:</strong> {currentLocation?.locationInfo || ''}</div>
-          <div><strong>Type:</strong> {businessType === 'retail' ? '🛍️ Retail' : '🏪 Wholesale'}</div>
+          <div><strong>Type:</strong> {safeBusinessType === 'retail' ? '🛍️ Retail' : '🏪 Wholesale'}</div>
         </div>
       )}
-      
+
       <Button
         type="primary"
         size="large"
