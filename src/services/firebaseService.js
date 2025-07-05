@@ -117,16 +117,14 @@ class FirebaseService {
   async getAll(collectionName, options = {}) {
     try {
       let q = collection(db, collectionName);
-      
+
       // Only use simple queries to avoid index requirements
       if (auth.currentUser) {
-        // Single where clause + orderBy (this combination usually has default indexes)
-        q = query(q, 
-          where('userId', '==', auth.currentUser.uid),
-          orderBy('createdAt', 'desc')
-        );
+        // The security rules will ensure only authorized users can query the data.
+        // We no longer filter by userId here to allow all authorized users to see all data.
+        q = query(q, orderBy('createdAt', 'desc'));
       } else {
-        // Just orderBy for public data
+        // Just orderBy for public data (though your rules will block this)
         q = query(q, orderBy('createdAt', 'desc'));
       }
 
@@ -148,13 +146,13 @@ class FirebaseService {
       return docs;
     } catch (error) {
       console.error(`Error getting documents from ${collectionName}:`, error);
-      
+
       // If still getting index errors, fall back to getting all documents
       if (error.code === 'failed-precondition' || error.message.includes('index')) {
         console.warn('Index error detected, falling back to simple query...');
         return this.getAllWithoutFilters(collectionName, options);
       }
-      
+
       throw new Error(`Error getting documents: ${error.message}`);
     }
   }
