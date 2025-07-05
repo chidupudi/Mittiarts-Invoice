@@ -1,4 +1,4 @@
-// src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management
+//  src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import firebaseService from '../../services/firebaseService';
 import invoiceService from '../../services/invoiceService';
@@ -211,8 +211,24 @@ export const createOrder = createAsyncThunk(
       
       const orderNumber = `${branchPrefix}-${Date.now().toString().slice(-8)}`;
 
+      // Helper to deeply remove undefined fields
+      function removeUndefinedDeep(obj) {
+        if (Array.isArray(obj)) {
+          return obj.map(removeUndefinedDeep);
+        } else if (obj && typeof obj === 'object') {
+          const cleaned = {};
+          Object.keys(obj).forEach(key => {
+            if (obj[key] !== undefined) {
+              cleaned[key] = removeUndefinedDeep(obj[key]);
+            }
+          });
+          return cleaned;
+        }
+        return obj;
+      }
+
       // Create comprehensive order object
-      const enhancedOrderData = {
+      const enhancedOrderDataRaw = {
         // Basic order info
         orderNumber,
         customerId: orderData.customerId,
@@ -279,6 +295,7 @@ export const createOrder = createAsyncThunk(
           branchRevenue: finalTotal
         }
       };
+      const enhancedOrderData = removeUndefinedDeep(enhancedOrderDataRaw);
 
       // Create the order in Firebase
       const order = await firebaseService.create('orders', enhancedOrderData);

@@ -24,7 +24,8 @@ import {
   Statistic,
   Radio,
   Switch,
-  Tooltip
+  Tooltip,
+  Descriptions
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -41,7 +42,8 @@ import {
   ShopOutlined,
   BankOutlined,
   HomeOutlined,
-  PayCircleOutlined
+  PayCircleOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import { 
   createOrder, 
@@ -336,27 +338,62 @@ const Billing = () => {
   const confirmAndGenerateInvoice = async () => {
     const totals = calculateTotals();
 
-    const orderData = {
-      customerId: selectedCustomer.id,
-      businessType,
-      branch: selectedBranch,
-      branchInfo: currentBranch,
-      isAdvanceBilling,
-      advanceAmount: isAdvanceBilling ? advanceAmount : 0,
-      remainingAmount: isAdvanceBilling ? remainingAmount : 0,
-      items: cart.map(item => ({
-        product: {
-          id: item.product.id,
-          name: item.product.name,
-          category: item.product.category
-        },
+    // Remove undefined fields from branchInfo
+    const cleanBranchInfo = {};
+    if (currentBranch) {
+      Object.keys(currentBranch).forEach(key => {
+        if (currentBranch[key] !== undefined) {
+          cleanBranchInfo[key] = currentBranch[key];
+        }
+      });
+    }
+
+    // Remove undefined fields from items
+    const cleanItems = cart.map(item => {
+      const cleanProduct = {};
+      if (item.product) {
+        Object.keys(item.product).forEach(key => {
+          if (item.product[key] !== undefined) {
+            cleanProduct[key] = item.product[key];
+          }
+        });
+      }
+      return {
+        product: cleanProduct,
         quantity: item.quantity,
         originalPrice: item.originalPrice,
         currentPrice: item.currentPrice,
         price: item.currentPrice,
         discount: item.originalPrice > 0 ? ((item.originalPrice - item.currentPrice) / item.originalPrice) * 100 : 0,
         businessType: item.businessType || businessType
-      })),
+      };
+    });
+
+    // Remove undefined fields from orderData (deep clean)
+    function removeUndefinedDeep(obj) {
+      if (Array.isArray(obj)) {
+        return obj.map(removeUndefinedDeep);
+      } else if (obj && typeof obj === 'object') {
+        const cleaned = {};
+        Object.keys(obj).forEach(key => {
+          if (obj[key] !== undefined) {
+            cleaned[key] = removeUndefinedDeep(obj[key]);
+          }
+        });
+        return cleaned;
+      }
+      return obj;
+    }
+
+    const rawOrderData = {
+      customerId: selectedCustomer.id,
+      businessType,
+      branch: selectedBranch,
+      branchInfo: cleanBranchInfo,
+      isAdvanceBilling,
+      advanceAmount: isAdvanceBilling ? advanceAmount : 0,
+      remainingAmount: isAdvanceBilling ? remainingAmount : 0,
+      items: cleanItems,
       paymentMethod: finalPaymentMethod,
       subtotal: totals.subtotal,
       discount: totals.totalDiscount,
@@ -365,6 +402,7 @@ const Billing = () => {
       afterDiscount: totals.currentTotal,
       total: totals.finalTotal,
     };
+    const orderData = removeUndefinedDeep(rawOrderData);
 
     const result = await dispatch(createOrder(orderData));
     if (result.type === 'orders/create/fulfilled') {
@@ -508,7 +546,7 @@ const Billing = () => {
   ];
 
   return (
-    <div style={{ padding: 16, height: 'calc(100vh - 120px)', overflow: 'hidden' }}>
+    <div style={{ padding: 16, height: 'calc(100vh - 120px)', overflow: 'auto' }}>
       {/* Header with Mitti Arts branding and business controls */}
       <div style={{ 
         background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)', 
@@ -949,7 +987,291 @@ const Billing = () => {
         </Col>
       </Row>
 
-      {/* All existing modals with enhanced fields... */}
+      {/* Payment Confirmation Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <DollarOutlined style={{ color: '#52c41a' }} />
+            <span>Confirm Payment</span>
+          </div>
+        }
+        open={showPaymentModal}
+        onCancel={() => setShowPaymentModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setShowPaymentModal(false)}>
+            Cancel
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            onClick={confirmAndGenerateInvoice}
+            icon={<CheckOutlined />}
+            style={{
+              background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+              border: 'none'
+            }}
+          >
+            Confirm & Generate Invoice
+          </Button>
+        ]}
+        width={500}
+      >
+        <div style={{ padding: '20px 0' }}>
+          <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
+            <Row gutter={16} align="middle">
+              <Col span={12}>
+                <Statistic
+                  title="Total Amount"
+                  value={totals.finalTotal}
+                  prefix="₹"
+                  precision={2}
+                  valueStyle={{ color: '#52c41a', fontSize: '24px' }}
+                />
+              </Col>
+              <Col span={12}>
+                <div>
+                  <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                    Payment Method:
+                  </Text>
+                  <Select
+                    value={finalPaymentMethod}
+                    onChange={setFinalPaymentMethod}
+                    style={{ width: '100%' }}
+                    size="large"
+                  >
+                    {paymentMethods.map(method => (
+                      <Option key={method} value={method}>{method}</Option>
+                    ))}
+                  </Select>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+
+          <Divider />
+
+          <div style={{ marginBottom: 16 }}>
+            <Text strong style={{ fontSize: '14px', display: 'block', marginBottom: 8 }}>
+              Order Summary:
+            </Text>
+            <Card size="small">
+              <Row justify="space-between" style={{ marginBottom: 4 }}>
+                <Text>Items:</Text>
+                <Text>{totals.itemCount} ({totals.totalQuantity} qty)</Text>
+              </Row>
+              <Row justify="space-between" style={{ marginBottom: 4 }}>
+                <Text>Subtotal:</Text>
+                <Text>₹{totals.subtotal.toFixed(2)}</Text>
+              </Row>
+              {totals.totalDiscount > 0 && (
+                <Row justify="space-between" style={{ marginBottom: 4 }}>
+                  <Text>Discount:</Text>
+                  <Text style={{ color: '#fa8c16' }}>-₹{totals.totalDiscount.toFixed(2)}</Text>
+                </Row>
+              )}
+              {totals.wholesaleDiscount > 0 && (
+                <Row justify="space-between" style={{ marginBottom: 4 }}>
+                  <Text>Wholesale Discount:</Text>
+                  <Text style={{ color: '#722ed1' }}>-₹{totals.wholesaleDiscount.toFixed(2)}</Text>
+                </Row>
+              )}
+              <Divider style={{ margin: '8px 0' }} />
+              <Row justify="space-between">
+                <Text strong>Final Total:</Text>
+                <Text strong style={{ color: '#52c41a' }}>₹{totals.finalTotal.toFixed(2)}</Text>
+              </Row>
+            </Card>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <Text strong style={{ fontSize: '14px', display: 'block', marginBottom: 8 }}>
+              Customer Details:
+            </Text>
+            <Card size="small">
+              <Row>
+                <Col span={8}>
+                  <Text type="secondary">Name:</Text>
+                </Col>
+                <Col span={16}>
+                  <Text strong>{selectedCustomer?.name || 'Walk-in Customer'}</Text>
+                </Col>
+              </Row>
+              {selectedCustomer?.phone && (
+                <Row style={{ marginTop: 4 }}>
+                  <Col span={8}>
+                    <Text type="secondary">Phone:</Text>
+                  </Col>
+                  <Col span={16}>
+                    <Text>{selectedCustomer.phone}</Text>
+                  </Col>
+                </Row>
+              )}
+              <Row style={{ marginTop: 4 }}>
+                <Col span={8}>
+                  <Text type="secondary">Type:</Text>
+                </Col>
+                <Col span={16}>
+                  <Tag color={businessType === 'wholesale' ? 'orange' : 'blue'}>
+                    {businessType === 'wholesale' ? '🏪 Wholesale' : '🛍️ Retail'}
+                  </Tag>
+                </Col>
+              </Row>
+              <Row style={{ marginTop: 4 }}>
+                <Col span={8}>
+                  <Text type="secondary">Branch:</Text>
+                </Col>
+                <Col span={16}>
+                  <Tag color={currentBranch.color || '#8b4513'}>
+                    {currentBranch.icon} {currentBranch.name}
+                  </Tag>
+                </Col>
+              </Row>
+            </Card>
+          </div>
+
+          <Alert
+            message="Please confirm the payment details before generating the invoice."
+            type="info"
+            showIcon
+            icon={<InfoCircleOutlined />}
+          />
+        </div>
+      </Modal>
+
+      {/* Advance Payment Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <PayCircleOutlined style={{ color: '#faad14' }} />
+            <span>Confirm Advance Payment</span>
+          </div>
+        }
+        open={showAdvanceModal}
+        onCancel={() => setShowAdvanceModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setShowAdvanceModal(false)}>
+            Cancel
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            onClick={confirmAndGenerateInvoice}
+            icon={<CheckOutlined />}
+            style={{
+              background: 'linear-gradient(135deg, #faad14 0%, #fa8c16 100%)',
+              border: 'none'
+            }}
+          >
+            Confirm & Generate Advance Invoice
+          </Button>
+        ]}
+        width={600}
+      >
+        <div style={{ padding: '20px 0' }}>
+          <Alert
+            message="Advance Billing"
+            description="This will generate an advance payment invoice. The customer is making a partial payment now and will pay the remaining amount later."
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={8}>
+              <Card size="small" style={{ backgroundColor: '#f0f5ff', border: '1px solid #adc6ff' }}>
+                <Statistic
+                  title="Total Amount"
+                  value={totals.finalTotal}
+                  prefix="₹"
+                  precision={2}
+                  valueStyle={{ fontSize: '20px' }}
+                />
+              </Card>
+            </Col>
+            <Col span={8}>
+          <Card size="small" style={{ backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
+            <Statistic
+              title="Advance Payment"
+              value={advanceAmount || 0}
+              prefix="₹"
+              precision={2}
+              valueStyle={{ color: '#52c41a', fontSize: '20px' }}
+            />
+          </Card>
+            </Col>
+            <Col span={8}>
+              <Card size="small" style={{ backgroundColor: '#fff7e6', border: '1px solid #ffd591' }}>
+                <Statistic
+                  title="Remaining"
+                  value={remainingAmount || 0}
+                  prefix="₹"
+                  precision={2}
+                  valueStyle={{ color: '#fa541c', fontSize: '20px' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Row gutter={16} align="middle">
+              <Col span={12}>
+                <Text strong>Advance Amount:</Text>
+                <InputNumber
+                  value={advanceAmount}
+                  onChange={setAdvanceAmount}
+                  min={0}
+                  max={totals.finalTotal - 1}
+                  style={{ width: '100%', marginTop: 8 }}
+                  prefix="₹"
+                  size="large"
+                />
+              </Col>
+              <Col span={12}>
+                <Text strong>Payment Method:</Text>
+                <Select
+                  value={finalPaymentMethod}
+                  onChange={setFinalPaymentMethod}
+                  style={{ width: '100%', marginTop: 8 }}
+                  size="large"
+                >
+                  {paymentMethods.map(method => (
+                    <Option key={method} value={method}>{method}</Option>
+                  ))}
+                </Select>
+              </Col>
+            </Row>
+          </Card>
+
+          <div style={{ marginBottom: 16 }}>
+            <Text strong style={{ fontSize: '14px', display: 'block', marginBottom: 8 }}>
+              Customer Details:
+            </Text>
+            <Card size="small">
+              <Descriptions column={1} size="small">
+                <Descriptions.Item label="Name">
+                  {selectedCustomer?.name || 'Walk-in Customer'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Phone">
+                  {selectedCustomer?.phone || 'Not provided'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Type">
+                  <Tag color={businessType === 'wholesale' ? 'orange' : 'blue'}>
+                    {businessType === 'wholesale' ? 'Wholesale' : 'Retail'}
+                  </Tag>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+          </div>
+
+            <Alert
+              message="Important"
+              description={`The customer will pay ₹${(advanceAmount || 0).toFixed(2)} now and ₹${(remainingAmount || 0).toFixed(2)} later. An advance invoice will be generated.`}
+              type="info"
+              showIcon
+            />
+        </div>
+      </Modal>
+
       {/* Custom Product Modal */}
       <Modal
         title="Add Custom Pottery Product"
@@ -1027,8 +1349,101 @@ const Billing = () => {
         </Form>
       </Modal>
 
-      {/* Rest of the modals remain the same but with Mitti Arts branding... */}
-      
+      {/* Add Customer Modal */}
+      <Modal
+        title="Add New Customer"
+        open={showCustomerModal}
+        onCancel={() => setShowCustomerModal(false)}
+        footer={null}
+        destroyOnClose
+        width={500}
+      >
+        <Form form={customerForm} layout="vertical" onFinish={handleAddDynamicCustomer}>
+          <Form.Item
+            name="name"
+            label="Customer Name"
+            rules={[{ required: true, message: 'Enter customer name' }]}
+          >
+            <Input placeholder="Enter customer name" />
+          </Form.Item>
+          
+          <Form.Item
+            name="phone"
+            label="Phone Number"
+            rules={[
+              { pattern: /^[6-9]\d{9}$/, message: 'Enter valid 10-digit phone number' }
+            ]}
+          >
+            <Input placeholder="Enter phone number (optional)" maxLength={10} />
+          </Form.Item>
+          
+          <Form.Item
+            name="email"
+            label="Email Address"
+            rules={[
+              { type: 'email', message: 'Enter valid email address' }
+            ]}
+          >
+            <Input placeholder="Enter email address (optional)" />
+          </Form.Item>
+          
+          <Form.Item>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setShowCustomerModal(false)}>
+                Cancel
+              </Button>
+              <Button type="primary" htmlType="submit">
+                Add Customer
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Price Edit Modal */}
+      <Modal
+        title="Edit Price"
+        open={showPriceModal}
+        onCancel={() => setShowPriceModal(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setShowPriceModal(false)}>
+            Cancel
+          </Button>,
+          <Button key="apply" type="primary" onClick={applyNewPrice}>
+            Apply Price
+          </Button>
+        ]}
+        width={400}
+      >
+        {editingItem && (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>{editingItem.product.name}</Text>
+              <br />
+              <Text type="secondary">Original Price: ₹{editingItem.originalPrice}</Text>
+            </div>
+            
+            <InputNumber
+              value={newPrice}
+              onChange={setNewPrice}
+              min={0}
+              step={0.01}
+              style={{ width: '100%' }}
+              prefix="₹"
+              size="large"
+              placeholder="Enter new price"
+            />
+            
+            {newPrice < editingItem.originalPrice && (
+              <Alert
+                message={`Discount: ₹${(editingItem.originalPrice - newPrice).toFixed(2)} (${((editingItem.originalPrice - newPrice) / editingItem.originalPrice * 100).toFixed(1)}%)`}
+                type="success"
+                style={{ marginTop: 16 }}
+              />
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

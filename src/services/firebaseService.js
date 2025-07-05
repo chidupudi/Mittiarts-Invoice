@@ -1,4 +1,5 @@
-// src/services/firebaseService.js - Simplified version to avoid index issues
+// src/services/firebaseService.js - Updated timestamp handling
+
 import {
   collection,
   doc,
@@ -17,6 +18,24 @@ import {
 import { auth, db } from '../firebase/config';
 
 class FirebaseService {
+  // Helper to convert Firestore document to plain object
+  convertDocToPlainObject(docData) {
+    const plainObject = { ...docData };
+    
+    // Convert all Timestamp fields to ISO strings
+    Object.keys(plainObject).forEach(key => {
+      if (plainObject[key] instanceof Timestamp) {
+        plainObject[key] = plainObject[key].toDate().toISOString();
+      } else if (plainObject[key]?.toDate && typeof plainObject[key].toDate === 'function') {
+        plainObject[key] = plainObject[key].toDate().toISOString();
+      } else if (plainObject[key] instanceof Date) {
+        plainObject[key] = plainObject[key].toISOString();
+      }
+    });
+    
+    return plainObject;
+  }
+
   // Generic CRUD operations
   async create(collectionName, data) {
     try {
@@ -27,8 +46,8 @@ class FirebaseService {
         userId: auth.currentUser?.uid
       });
       
-      // Return the created document with ID
-      const newDoc = { id: docRef.id, ...data, createdAt: Timestamp.now(), updatedAt: Timestamp.now() };
+      // Get the created document to return with proper ID
+      const newDoc = await this.getById(collectionName, docRef.id);
       return newDoc;
     } catch (error) {
       console.error(`Error creating document in ${collectionName}:`, error);
@@ -39,11 +58,28 @@ class FirebaseService {
   async update(collectionName, id, data) {
     try {
       const docRef = doc(db, collectionName, id);
+      
+      // Convert dates to Timestamps for Firestore
+      const updateData = { ...data };
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] instanceof Date) {
+          updateData[key] = Timestamp.fromDate(updateData[key]);
+        } else if (typeof updateData[key] === 'string' && !isNaN(Date.parse(updateData[key]))) {
+          // Check if it's a valid date string
+          const date = new Date(updateData[key]);
+          if (key.includes('Date') || key.includes('At')) {
+            updateData[key] = Timestamp.fromDate(date);
+          }
+        }
+      });
+      
       await updateDoc(docRef, {
-        ...data,
+        ...updateData,
         updatedAt: Timestamp.now()
       });
-      return { id, ...data, updatedAt: Timestamp.now() };
+      
+      // Return updated document
+      return await this.getById(collectionName, id);
     } catch (error) {
       console.error(`Error updating document in ${collectionName}:`, error);
       throw new Error(`Error updating document: ${error.message}`);
@@ -66,7 +102,8 @@ class FirebaseService {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() };
+        const data = this.convertDocToPlainObject(docSnap.data());
+        return { id: docSnap.id, ...data };
       } else {
         throw new Error('Document not found');
       }
@@ -101,7 +138,8 @@ class FirebaseService {
       const querySnapshot = await getDocs(q);
       let docs = [];
       querySnapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
+        const data = this.convertDocToPlainObject(doc.data());
+        docs.push({ id: doc.id, ...data });
       });
 
       // Apply client-side filtering for complex conditions
@@ -129,7 +167,8 @@ class FirebaseService {
       
       let docs = [];
       querySnapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
+        const data = this.convertDocToPlainObject(doc.data());
+        docs.push({ id: doc.id, ...data });
       });
 
       // Filter by user on client side
@@ -142,8 +181,8 @@ class FirebaseService {
 
       // Sort on client side
       docs.sort((a, b) => {
-        const aDate = a.createdAt?.toDate?.() || new Date(a.createdAt);
-        const bDate = b.createdAt?.toDate?.() || new Date(b.createdAt);
+        const aDate = new Date(a.createdAt);
+        const bDate = new Date(b.createdAt);
         return bDate - aDate; // Descending order
       });
 
@@ -166,14 +205,14 @@ class FirebaseService {
     return docs.filter(doc => {
       return options.where.every(condition => {
         let fieldValue = this.getNestedFieldValue(doc, condition.field);
-        const targetValue = condition.value;
+        let targetValue = condition.value;
         
-        // Handle Firestore Timestamp objects
-        if (fieldValue?.toDate) {
-          fieldValue = fieldValue.toDate();
+        // Convert date strings to Date objects for comparison
+        if (typeof fieldValue === 'string' && !isNaN(Date.parse(fieldValue))) {
+          fieldValue = new Date(fieldValue);
         }
-        if (targetValue?.toDate) {
-          targetValue = targetValue.toDate();
+        if (targetValue instanceof Date || (typeof targetValue === 'string' && !isNaN(Date.parse(targetValue)))) {
+          targetValue = new Date(targetValue);
         }
         
         switch (condition.operator) {
@@ -220,7 +259,8 @@ class FirebaseService {
       return onSnapshot(q, (querySnapshot) => {
         const docs = [];
         querySnapshot.forEach((doc) => {
-          docs.push({ id: doc.id, ...doc.data() });
+          const data = this.convertDocToPlainObject(doc.data());
+          docs.push({ id: doc.id, ...data });
         });
         
         // Apply filters and sorting on client side
@@ -228,8 +268,8 @@ class FirebaseService {
         
         // Sort by createdAt
         filteredDocs.sort((a, b) => {
-          const aDate = a.createdAt?.toDate?.() || new Date(a.createdAt);
-          const bDate = b.createdAt?.toDate?.() || new Date(b.createdAt);
+          const aDate = new Date(a.createdAt);
+          const bDate = new Date(b.createdAt);
           return bDate - aDate;
         });
         
