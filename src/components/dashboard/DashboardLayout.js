@@ -1,5 +1,5 @@
-// src/components/dashboard/DashboardLayout.js
-import React, { useState } from 'react';
+// src/components/dashboard/DashboardLayout.js - Mobile Optimized with Store Front
+import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -12,6 +12,8 @@ import {
   Badge,
   Divider,
   Tooltip,
+  Drawer,
+  Grid,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -20,20 +22,20 @@ import {
   ShopOutlined,
   FileTextOutlined,
   ShoppingCartOutlined,
-  WalletOutlined,
-  BarChartOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  MenuOutlined,
   LogoutOutlined,
   SettingOutlined,
   NotificationOutlined,
   FilePdfOutlined,
+  CloseOutlined,
+  HomeOutlined,
 } from '@ant-design/icons';
 
 import { logoutUser } from '../../features/auth/authSlice';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
+const { useBreakpoint } = Grid;
 
 const menuItems = [
   { key: 'dashboard', path: '/', label: 'Dashboard', icon: <DashboardOutlined />, color: '#1976d2' },
@@ -42,8 +44,7 @@ const menuItems = [
   { key: 'billing', path: '/billing', label: 'Billing', icon: <ShoppingCartOutlined />, color: '#ed6c02' },
   { key: 'orders', path: '/orders', label: 'Orders', icon: <FileTextOutlined />, color: '#0288d1' },
   { key: 'invoices', path: '/invoices', label: 'Invoices', icon: <FilePdfOutlined />, color: '#7b1fa2' },
-  { key: 'expenses', path: '/expenses', label: 'Expenses', icon: <WalletOutlined />, color: '#d32f2f' },
-  { key: 'reports', path: '/reports', label: 'Reports', icon: <BarChartOutlined />, color: '#388e3c' },
+  { key: 'storefront', path: '/storefront', label: 'Store Front', icon: <HomeOutlined />, color: '#8b4513' },
 ];
 
 const DashboardLayout = ({ children }) => {
@@ -51,18 +52,35 @@ const DashboardLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useSelector(state => state.auth);
+  const screens = useBreakpoint();
 
+  // State for sidebar management
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile and auto-collapse sidebar
+  useEffect(() => {
+    const mobile = !screens.lg;
+    setIsMobile(mobile);
+    
+    if (mobile) {
+      setCollapsed(true);
+      setMobileDrawerOpen(false);
+    } else {
+      setCollapsed(false);
+    }
+  }, [screens]);
 
   console.log('DashboardLayout rendering - User:', user);
   console.log('Current location:', location.pathname);
-  console.log('Children:', children);
+  console.log('Is Mobile:', isMobile);
 
   const selectedKey = (() => {
     for (const item of menuItems) {
       if (location.pathname === item.path) return item.key;
-      if (item.key === 'reports' && location.pathname.startsWith('/reports')) return 'reports';
       if (item.key === 'invoices' && location.pathname.startsWith('/invoices')) return 'invoices';
+      if (item.key === 'storefront' && location.pathname.startsWith('/storefront')) return 'storefront';
     }
     return 'dashboard';
   })();
@@ -73,6 +91,11 @@ const DashboardLayout = ({ children }) => {
     if (item) {
       console.log('Navigating to:', item.path);
       navigate(item.path);
+      
+      // Close mobile drawer after navigation
+      if (isMobile) {
+        setMobileDrawerOpen(false);
+      }
     }
   };
 
@@ -116,125 +139,278 @@ const DashboardLayout = ({ children }) => {
     }
   ];
 
-  return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={() => setCollapsed(!collapsed)}
-        width={280}
-        theme="light"
-        style={{
-          boxShadow: '2px 0 6px rgba(0,21,41,.35)',
+  // Render sidebar content
+  const renderSidebarContent = () => (
+    <div style={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      background: 'linear-gradient(180deg, #8b4513 0%, #a0522d 100%)'
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: collapsed && !isMobile ? '16px 12px' : '16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: collapsed && !isMobile ? 0 : 12,
+        justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
+        background: 'rgba(255,255,255,0.1)',
+        borderBottom: '1px solid rgba(255,255,255,0.2)',
+        color: 'white'
+      }}>
+        <div style={{
+          width: '36px',
+          height: '36px',
+          background: 'white',
+          borderRadius: '8px',
           display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        <div
-          style={{
-            height: 80,
-            margin: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            fontWeight: 'bold',
-            fontSize: 20,
-            color: '#1890ff'
-          }}
-        >
-          <ShopOutlined style={{ fontSize: 32 }} />
-          {!collapsed && (
-            <div>
-              <Title level={5} style={{ margin: 0 }}>
-                Mitti Arts
-              </Title>
-              <Text type="secondary">POS System</Text>
-            </div>
-          )}
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#8b4513',
+          fontWeight: 'bold',
+          fontSize: '18px'
+        }}>
+          🏺
         </div>
+        {(!collapsed || isMobile) && (
+          <div>
+            <Title level={5} style={{ margin: 0, color: 'white' }}>
+              Mitti Arts
+            </Title>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px' }}>
+              POS System
+            </Text>
+          </div>
+        )}
+      </div>
 
-        <Divider />
-
-        <div style={{ padding: '0 16px', marginBottom: 12, backgroundColor: '#f0f5ff', borderRadius: 4 }}>
-          <Avatar size={40} style={{ backgroundColor: '#1890ff', fontSize: 20 }}>
-            {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
-          </Avatar>
-          {!collapsed && (
-            <div style={{ marginLeft: 12, display: 'inline-block', verticalAlign: 'middle', maxWidth: 180 }}>
-              <Text strong ellipsis>
+      {/* User Info */}
+      {(!collapsed || isMobile) && (
+        <div style={{ 
+          padding: '12px 16px', 
+          background: 'rgba(255,255,255,0.1)',
+          borderBottom: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Avatar 
+              size={32} 
+              style={{ backgroundColor: 'white', color: '#8b4513', fontSize: '14px' }}
+            >
+              {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+            </Avatar>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text strong style={{ color: 'white', fontSize: '13px', display: 'block' }}>
                 {user?.displayName || 'User'}
               </Text>
-              <br />
-              <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+              <Text style={{ 
+                color: 'rgba(255,255,255,0.8)', 
+                fontSize: '11px',
+                display: 'block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
                 {user?.email}
               </Text>
             </div>
-          )}
+          </div>
         </div>
+      )}
 
+      {/* Menu */}
+      <div style={{ flex: 1, padding: '8px 0' }}>
         <Menu
           mode="inline"
           selectedKeys={[selectedKey]}
-          style={{ flex: 1, borderRight: 0 }}
           onClick={onMenuClick}
+          style={{ 
+            background: 'transparent',
+            border: 'none',
+            color: 'white'
+          }}
+          theme="dark"
+          inlineCollapsed={collapsed && !isMobile}
           items={menuItems.map(item => ({
             key: item.key,
-            icon: item.icon,
+            icon: <span style={{ fontSize: '16px' }}>{item.icon}</span>,
             label: item.label,
-            style: { color: selectedKey === item.key ? item.color : undefined }
+            style: { 
+              color: selectedKey === item.key ? '#fff' : 'rgba(255,255,255,0.8)',
+              backgroundColor: selectedKey === item.key ? 'rgba(255,255,255,0.2)' : 'transparent',
+              borderRadius: '6px',
+              margin: '4px 8px',
+              height: '42px',
+              lineHeight: '42px'
+            }
           }))}
         />
+      </div>
 
-        <Divider />
+      {/* Footer */}
+      <div style={{ 
+        padding: '12px', 
+        textAlign: 'center',
+        borderTop: '1px solid rgba(255,255,255,0.1)',
+        background: 'rgba(0,0,0,0.1)'
+      }}>
+        {(!collapsed || isMobile) && (
+          <>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px', display: 'block' }}>
+              Version 1.0.0
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px' }}>
+              &copy; 2024 Mitti Arts
+            </Text>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
-        <div style={{ padding: 16, textAlign: 'center', marginTop: 'auto' }}>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-            Version 1.0.0
-          </Text>
-          <Text type="secondary" style={{ fontSize: 10 }}>
-            &copy; 2023 Mitti Arts POS
-          </Text>
-        </div>
-      </Sider>
-
-      <Layout>
-        <Header
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          width={260}
+          collapsedWidth={60}
           style={{
-            padding: '0 16px',
-            background: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: '0 1px 4px rgba(0,21,41,.08)'
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            zIndex: 100,
+            boxShadow: '2px 0 8px rgba(0,0,0,0.15)'
           }}
+          theme="light"
         >
-          <Button
-            type="text"
-            onClick={() => setCollapsed(!collapsed)}
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            style={{ fontSize: 20 }}
-          />
+          {renderSidebarContent()}
+        </Sider>
+      )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      {/* Mobile Drawer */}
+      {isMobile && (
+        <Drawer
+          title={null}
+          placement="left"
+          onClose={() => setMobileDrawerOpen(false)}
+          open={mobileDrawerOpen}
+          width={260}
+          style={{ padding: 0 }}
+          bodyStyle={{ padding: 0 }}
+          headerStyle={{ display: 'none' }}
+          closeIcon={<CloseOutlined style={{ color: 'white' }} />}
+        >
+          {renderSidebarContent()}
+        </Drawer>
+      )}
+
+      <Layout style={{ 
+        marginLeft: isMobile ? 0 : (collapsed ? 60 : 260),
+        transition: 'margin-left 0.2s'
+      }}>
+        {/* Header */}
+        <Header style={{
+          padding: '0 16px',
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 99
+        }}>
+          {/* Left side - Menu button for mobile or collapse button for desktop */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isMobile ? (
+              <Button
+                type="text"
+                icon={<MenuOutlined style={{ fontSize: '18px' }} />}
+                onClick={() => setMobileDrawerOpen(true)}
+                style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  backgroundColor: '#8b4513',
+                  color: 'white'
+                }}
+              />
+            ) : (
+              <Button
+                type="text"
+                onClick={() => setCollapsed(!collapsed)}
+                icon={<MenuOutlined />}
+                style={{ fontSize: '16px' }}
+              />
+            )}
+
+            {/* Page Title for mobile */}
+            {isMobile && (
+              <div>
+                <Title level={5} style={{ margin: 0, color: '#8b4513' }}>
+                  {menuItems.find(item => item.key === selectedKey)?.label || 'Dashboard'}
+                </Title>
+              </div>
+            )}
+          </div>
+
+          {/* Right side - Notifications and Profile */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Dropdown menu={{ items: notificationItems }} trigger={['click']}>
               <Badge count={0} offset={[0, 0]}>
                 <Tooltip title="Notifications">
-                  <Button shape="circle" icon={<NotificationOutlined />} />
+                  <Button 
+                    shape="circle" 
+                    icon={<NotificationOutlined />}
+                    style={{ border: 'none', boxShadow: 'none' }}
+                  />
                 </Tooltip>
               </Badge>
             </Dropdown>
 
             <Dropdown menu={{ items: profileItems }} placement="bottomRight">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 8, 
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '8px',
+                transition: 'background-color 0.2s'
+              }}>
                 <Avatar size={32} src={user?.photoURL}>
                   {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
                 </Avatar>
+                {!isMobile && (
+                  <div style={{ minWidth: 0 }}>
+                    <Text strong style={{ fontSize: '13px', display: 'block' }}>
+                      {user?.displayName || 'User'}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      {user?.email}
+                    </Text>
+                  </div>
+                )}
               </div>
             </Dropdown>
           </div>
         </Header>
 
-        <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: '#fff' }}>
+        {/* Content */}
+        <Content style={{ 
+          margin: isMobile ? '8px' : '16px',
+          padding: isMobile ? '12px' : '24px',
+          minHeight: 'calc(100vh - 64px)',
+          background: '#f5f5f5',
+          borderRadius: isMobile ? '8px' : '12px'
+        }}>
           {children}
         </Content>
       </Layout>

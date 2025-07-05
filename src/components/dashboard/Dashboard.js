@@ -53,7 +53,7 @@ import {
 import { fetchOrders } from '../../features/order/orderSlice';
 import { fetchProducts } from '../../features/products/productSlice';
 import { fetchCustomers } from '../../features/customer/customerSlice';
-import { fetchExpenses } from '../../features/expense/expenseSlice';
+
 import moment from 'moment';
 
 const { Title, Text } = Typography;
@@ -131,8 +131,8 @@ const Dashboard = () => {
     // Load all data
     dispatch(fetchOrders({}));
     dispatch(fetchProducts({}));
-    dispatch(fetchCustomers({}));
-    dispatch(fetchExpenses({}));
+    
+    
   }, [dispatch]);
 
   useEffect(() => {

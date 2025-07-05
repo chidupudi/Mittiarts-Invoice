@@ -4,8 +4,8 @@ import authReducer from '../features/auth/authSlice';
 import productReducer from '../features/products/productSlice';
 import customerReducer from '../features/customer/customerSlice';
 import orderReducer from '../features/order/orderSlice';
-import expenseReducer from '../features/expense/expenseSlice';
-import reportReducer from '../features/reports/reportSlice';
+
+
 
 export const store = configureStore({
   reducer: {
@@ -13,8 +13,7 @@ export const store = configureStore({
     products: productReducer,
     customers: customerReducer,
     orders: orderReducer,
-    expenses: expenseReducer,
-    reports: reportReducer
+   
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -23,8 +22,8 @@ export const store = configureStore({
           'auth/setUser',
           'products/fetchProducts/fulfilled',
           'customers/fetchCustomers/fulfilled',
-          'orders/fetchOrders/fulfilled',
-          'expenses/fetchExpenses/fulfilled'
+          'orders/fetchOrders/fulfilled'
+          
         ],
         ignoredPaths: [
           'products.items',

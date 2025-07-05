@@ -1,4 +1,4 @@
-// src/App.js - Fixed version
+// src/App.js - Updated with StoreFront routing
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -20,15 +20,14 @@ import Dashboard from './components/dashboard/Dashboard';
 import ProductList from './components/products/ProductList';
 import CustomerList from './components/customer/CustomerList';
 import OrderList from './components/billing/OrderList';
-import ExpenseList from './components/expense/ExpenseList';
 import Billing from './components/billing/Billing';
-import Reports from './components/reports/Reports';
 import Invoice from './components/billing/Invoice';
 import InvoiceList from './components/billing/InvoiceList';
+import StoreFront from './components/storefront/StoreFront';
 
 const antdTheme = {
   token: {
-    colorPrimary: '#1677ff',
+    colorPrimary: '#8b4513', // Updated to Mitti Arts pottery brown
     borderRadius: 8,
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
   },
@@ -39,6 +38,13 @@ const antdTheme = {
     },
     Button: {
       borderRadius: 8,
+    },
+    Layout: {
+      siderBg: '#8b4513', // Pottery brown sidebar
+    },
+    Menu: {
+      darkItemBg: '#8b4513',
+      darkItemSelectedBg: 'rgba(255,255,255,0.2)',
     },
   },
 };
@@ -84,10 +90,32 @@ function ProtectedRoute({ children }) {
         justifyContent: 'center', 
         alignItems: 'center', 
         height: '100vh',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)'
       }}>
-        <Spin size="large" />
-        <p style={{ marginTop: 16 }}>Loading...</p>
+        <div style={{
+          background: 'white',
+          padding: '40px',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            fontSize: '48px',
+            marginBottom: '16px'
+          }}>
+            🏺
+          </div>
+          <Spin size="large" />
+          <p style={{ 
+            marginTop: 16, 
+            color: '#8b4513',
+            fontWeight: 'bold',
+            fontSize: '16px' 
+          }}>
+            Loading Mitti Arts...
+          </p>
+        </div>
       </div>
     );
   }
@@ -117,16 +145,28 @@ function AppContent() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Routes>
+                  {/* Dashboard */}
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/dashboard" element={<Dashboard />} />
+                  
+                  {/* Product Management */}
                   <Route path="/products" element={<ProductList />} />
+                  
+                  {/* Customer Management */}
                   <Route path="/customers" element={<CustomerList />} />
-                  <Route path="/orders" element={<OrderList />} />
-                  <Route path="/expenses" element={<ExpenseList />} />
+                  
+                  {/* Order & Billing Management */}
                   <Route path="/billing" element={<Billing />} />
-                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/orders" element={<OrderList />} />
+                  
+                  {/* Invoice Management */}
                   <Route path="/invoices" element={<InvoiceList />} />
                   <Route path="/invoices/:id" element={<Invoice />} />
+                  
+                  {/* Store Front Management - NEW */}
+                  <Route path="/storefront" element={<StoreFront />} />
+                  <Route path="/storefront/*" element={<StoreFront />} />
+                  
                   {/* Catch all route */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
