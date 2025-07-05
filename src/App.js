@@ -14,7 +14,6 @@ import { setUser, setLoading } from './features/auth/authSlice';
 
 // Components
 import Login from './components/auth/Login';
-import Register from './components/auth/Register';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import Dashboard from './components/dashboard/Dashboard';
 import ProductList from './components/products/ProductList';
@@ -136,7 +135,6 @@ function AppContent() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         
         {/* Protected routes */}
         <Route 

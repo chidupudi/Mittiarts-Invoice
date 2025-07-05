@@ -97,11 +97,6 @@ const Login = () => {
               {isLoading ? 'Signing In...' : 'Sign In'}
             </Button>
           </Form.Item>
-
-          <Text type="secondary">
-            Don't have an account?{' '}
-            <Link to="/register">Sign up here</Link>
-          </Text>
         </Form>
       </Card>
     </div>
