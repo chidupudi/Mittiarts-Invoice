@@ -1,4 +1,4 @@
-// src/components/dashboard/Dashboard.js - Mitti Arts pottery business dashboard
+// src/components/dashboard/Dashboard.js - Fixed Mitti Arts pottery business dashboard
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -104,10 +104,9 @@ const StatCard = ({ title, value, icon, color, trend, trendValue, prefix, suffix
 const Dashboard = () => {
   const dispatch = useDispatch();
   
-  const { items: orders, loading: ordersLoading } = useSelector(state => state.orders);
-  const { items: products, loading: productsLoading } = useSelector(state => state.products);
-  const { items: customers, loading: customersLoading } = useSelector(state => state.customers);
-  const { items: expenses, loading: expensesLoading } = useSelector(state => state.expenses);
+  const { items: orders = [], loading: ordersLoading } = useSelector(state => state.orders);
+  const { items: products = [], loading: productsLoading } = useSelector(state => state.products);
+  const { items: customers = [], loading: customersLoading } = useSelector(state => state.customers);
 
   const [dateFilter, setDateFilter] = useState('week'); // week, 2weeks, month
   const [dashboardData, setDashboardData] = useState({
@@ -116,7 +115,6 @@ const Dashboard = () => {
     totalCustomers: 0,
     totalProducts: 0,
     lowStockProducts: 0,
-    totalExpenses: 0,
     totalProfit: 0,
     profitMargin: 0,
     costAnalysis: { withCost: 0, withoutCost: 0 },
@@ -124,23 +122,23 @@ const Dashboard = () => {
     topProducts: [],
     recentOrders: [],
     profitData: [],
-    categoryBreakdown: []
+    categoryBreakdown: [],
+    branchPerformance: []
   });
 
   useEffect(() => {
     // Load all data
     dispatch(fetchOrders({}));
     dispatch(fetchProducts({}));
-    
-    
+    dispatch(fetchCustomers({}));
   }, [dispatch]);
 
   useEffect(() => {
     // Calculate dashboard metrics when data changes
-    if (orders.length || products.length || customers.length || expenses.length) {
+    if (orders.length || products.length || customers.length) {
       calculateDashboardData();
     }
-  }, [orders, products, customers, expenses, dateFilter]);
+  }, [orders, products, customers, dateFilter]);
 
   const getDateRange = () => {
     const now = moment();
@@ -177,21 +175,13 @@ const Dashboard = () => {
     const totalSales = filteredOrders.reduce((sum, order) => sum + (order.total || 0), 0);
     const totalOrders = filteredOrders.length;
     
-    // Calculate expenses for the same period
-    const filteredExpenses = expenses.filter(expense => {
-      const expenseDate = moment(expense.date?.toDate?.() || expense.date);
-      return expenseDate.isBetween(startDate, endDate, null, '[]');
-    });
-    const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-
     // Calculate cost analysis
     const costAnalysis = analyzeCostPrices();
     
     // Calculate total cost of goods sold and profit
     const totalCostOfGoods = calculateCostOfGoods(filteredOrders);
     const grossProfit = totalSales - totalCostOfGoods;
-    const netProfit = grossProfit - totalExpenses;
-    const profitMargin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0;
+    const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
 
     // Low stock products (stock <= 5 for pottery)
     const lowStockProducts = products.filter(product => product.stock <= 5).length;
@@ -200,7 +190,7 @@ const Dashboard = () => {
     const salesData = generateSalesData(filteredOrders, startDate, endDate);
     
     // Profit data for chart
-    const profitData = generateProfitData(filteredOrders, filteredExpenses, startDate, endDate);
+    const profitData = generateProfitData(filteredOrders, startDate, endDate);
     
     // Top products by sales
     const topProducts = getTopProducts(filteredOrders);
@@ -213,21 +203,24 @@ const Dashboard = () => {
     // Category breakdown for pottery business
     const categoryBreakdown = getCategoryBreakdown();
 
+    // Branch performance analysis
+    const branchPerformance = getBranchPerformance(filteredOrders);
+
     setDashboardData({
       totalSales,
       totalOrders,
       totalCustomers: customers.length,
       totalProducts: products.length,
       lowStockProducts,
-      totalExpenses,
-      totalProfit: netProfit,
+      totalProfit: grossProfit,
       profitMargin,
       costAnalysis,
       salesData,
       topProducts,
       recentOrders,
       profitData,
-      categoryBreakdown
+      categoryBreakdown,
+      branchPerformance
     });
   };
 
@@ -284,7 +277,7 @@ const Dashboard = () => {
     return days;
   };
 
-  const generateProfitData = (ordersList, expensesList, start, end) => {
+  const generateProfitData = (ordersList, start, end) => {
     const days = [];
     const current = start.clone();
     
@@ -294,21 +287,14 @@ const Dashboard = () => {
         return orderDate.isSame(current, 'day');
       });
       
-      const dayExpenses = expensesList.filter(expense => {
-        const expenseDate = moment(expense.date?.toDate?.() || expense.date);
-        return expenseDate.isSame(current, 'day');
-      });
-      
       const dayRevenue = dayOrders.reduce((sum, order) => sum + (order.total || 0), 0);
       const dayCost = calculateCostOfGoods(dayOrders);
-      const dayExpenseTotal = dayExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-      const dayProfit = dayRevenue - dayCost - dayExpenseTotal;
+      const dayProfit = dayRevenue - dayCost;
       
       days.push({
         date: current.format('MMM DD'),
         revenue: dayRevenue,
         cost: dayCost,
-        expenses: dayExpenseTotal,
         profit: dayProfit,
         fullDate: current.format('YYYY-MM-DD')
       });
@@ -367,6 +353,38 @@ const Dashboard = () => {
     return Object.values(categoryData);
   };
 
+  const getBranchPerformance = (ordersList) => {
+    const branchData = {};
+    
+    ordersList.forEach(order => {
+      const branch = order.branch || 'main_showroom';
+      const branchName = getBranchName(branch);
+      
+      if (!branchData[branch]) {
+        branchData[branch] = {
+          name: branchName,
+          orders: 0,
+          revenue: 0,
+          branch: branch
+        };
+      }
+      
+      branchData[branch].orders += 1;
+      branchData[branch].revenue += order.total || 0;
+    });
+
+    return Object.values(branchData);
+  };
+
+  const getBranchName = (branchId) => {
+    const branchNames = {
+      'main_showroom': 'Main Showroom',
+      'pottery_workshop': 'Pottery Workshop',
+      'export_unit': 'Export Unit'
+    };
+    return branchNames[branchId] || 'Unknown Branch';
+  };
+
   const getCategoryEmoji = (category) => {
     const categoryMap = {
       'Pottery': '🏺',
@@ -381,7 +399,7 @@ const Dashboard = () => {
     return categoryMap[category] || '🏺';
   };
 
-  const isLoading = ordersLoading || productsLoading || customersLoading || expensesLoading;
+  const isLoading = ordersLoading || productsLoading || customersLoading;
 
   const recentOrdersColumns = [
     {
@@ -395,6 +413,16 @@ const Dashboard = () => {
       dataIndex: ['customer', 'name'],
       key: 'customer',
       render: (text) => text || 'Walk-in Customer'
+    },
+    {
+      title: 'Branch',
+      dataIndex: 'branch',
+      key: 'branch',
+      render: (branch) => (
+        <Tag color="#8b4513">
+          {getBranchName(branch)}
+        </Tag>
+      )
     },
     {
       title: 'Date',
@@ -560,21 +588,20 @@ const Dashboard = () => {
         </Col>
         <Col xs={24} sm={12} md={8} lg={6}>
           <StatCard
-            title="Expenses"
-            value={dashboardData.totalExpenses.toFixed(2)}
-            prefix="₹"
-            icon={<ArrowDownOutlined />}
-            color="#f5222d"
-          />
-        </Col>
-        <Col xs={24} sm={12} md={8} lg={6}>
-          <StatCard
             title="Profit Margin"
             value={dashboardData.profitMargin.toFixed(1)}
             suffix="%"
             icon={<DollarOutlined />}
             color={dashboardData.profitMargin >= 20 ? "#3f8600" : dashboardData.profitMargin >= 10 ? "#faad14" : "#f5222d"}
             warning={costWarning}
+          />
+        </Col>
+        <Col xs={24} sm={12} md={8} lg={6}>
+          <StatCard
+            title="Active Branches"
+            value={dashboardData.branchPerformance.length}
+            icon={<LineChartOutlined />}
+            color="#228b22"
           />
         </Col>
       </Row>
@@ -636,30 +663,30 @@ const Dashboard = () => {
             title={
               <Space>
                 <PieChartOutlined />
-                <Text strong>Pottery Categories</Text>
+                <Text strong>Branch Performance</Text>
               </Space>
             }
             style={{ height: '420px' }}
           >
             <div style={{ height: '320px' }}>
-              {dashboardData.categoryBreakdown.length > 0 ? (
+              {dashboardData.branchPerformance.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={dashboardData.categoryBreakdown}
+                      data={dashboardData.branchPerformance}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name.slice(0, 10)}... ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
-                      dataKey="count"
+                      dataKey="revenue"
                     >
-                      {dashboardData.categoryBreakdown.map((entry, index) => (
+                      {dashboardData.branchPerformance.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <RechartsTooltip formatter={(value, name) => [value, 'Products']} />
+                    <RechartsTooltip formatter={(value, name) => [`₹${value.toLocaleString()}`, 'Revenue']} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
@@ -669,7 +696,7 @@ const Dashboard = () => {
                   alignItems: 'center', 
                   height: '100%' 
                 }}>
-                  <Text type="secondary">No pottery data available</Text>
+                  <Text type="secondary">No branch data available</Text>
                 </div>
               )}
             </div>
@@ -770,26 +797,68 @@ const Dashboard = () => {
         </Card>
       )}
 
+      {/* Branch Performance Details */}
+      {dashboardData.branchPerformance.length > 0 && (
+        <Card title="Branch Performance Details" style={{ marginTop: 16 }}>
+          <Row gutter={16}>
+            {dashboardData.branchPerformance.map((branch, index) => (
+              <Col xs={24} sm={8} key={branch.branch}>
+                <Card size="small" style={{ textAlign: 'center', border: `2px solid ${COLORS[index % COLORS.length]}` }}>
+                  <Title level={5} style={{ margin: 0, color: COLORS[index % COLORS.length] }}>
+                    {branch.name}
+                  </Title>
+                  <Row gutter={8} style={{ marginTop: 8 }}>
+                    <Col span={12}>
+                      <Statistic
+                        title="Orders"
+                        value={branch.orders}
+                        valueStyle={{ fontSize: '16px' }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Statistic
+                        title="Revenue"
+                        value={branch.revenue}
+                        prefix="₹"
+                        formatter={(value) => `${(value / 1000).toFixed(1)}k`}
+                        valueStyle={{ fontSize: '16px' }}
+                      />
+                    </Col>
+                  </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </Card>
+      )}
+
       {/* Quick Insights */}
       {dashboardData.totalOrders > 0 && (
         <Card title="Business Insights" size="small" style={{ marginTop: 16 }}>
           <Row gutter={16}>
-            <Col span={8}>
+            <Col span={6}>
               <Text type="secondary">Order Success Rate:</Text>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#228b22' }}>
                 {((dashboardData.totalOrders / (dashboardData.totalOrders + 0)) * 100).toFixed(1)}%
               </div>
             </Col>
-            <Col span={8}>
-              <Text type="secondary">Avg Discount per Order:</Text>
+            <Col span={6}>
+              <Text type="secondary">Avg Order Value:</Text>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#faad14' }}>
-                ₹{dashboardData.totalOrders > 0 ? (0 / dashboardData.totalOrders).toFixed(2) : '0.00'}
+                ₹{dashboardData.totalOrders > 0 ? (dashboardData.totalSales / dashboardData.totalOrders).toFixed(2) : '0.00'}
               </div>
             </Col>
-            <Col span={8}>
+            <Col span={6}>
               <Text type="secondary">Revenue per Day:</Text>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#8b4513' }}>
                 ₹{(dashboardData.totalSales / 7).toFixed(2)}
+              </div>
+            </Col>
+            <Col span={6}>
+              <Text type="secondary">Top Performing Branch:</Text>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
+                {dashboardData.branchPerformance.length > 0 ? 
+                  dashboardData.branchPerformance.sort((a, b) => b.revenue - a.revenue)[0].name : 'N/A'}
               </div>
             </Col>
           </Row>
