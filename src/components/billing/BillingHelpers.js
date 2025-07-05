@@ -53,8 +53,8 @@ export const calculateTotals = (cart, businessType) => {
  * @param {Number} advanceAmount - Amount of advance payment
  * @returns {Number} - Remaining amount to be paid
  */
-export const calculateRemainingAmount = (cart, isAdvanceBilling, advanceAmount) => {
-  const totals = calculateTotals(cart);
+export const calculateRemainingAmount = (cart, isAdvanceBilling, advanceAmount, businessType) => {
+  const totals = calculateTotals(cart, businessType);
   if (isAdvanceBilling && advanceAmount > 0) {
     return Math.max(0, totals.finalTotal - advanceAmount);
   } else {
@@ -124,14 +124,13 @@ export const prepareOrderData = ({
   isAdvanceBilling,
   advanceAmount,
   remainingAmount,
-  finalPaymentMethod
+  finalPaymentMethod,
+  selectedBank
 }) => {
   const totals = calculateTotals(cart, businessType);
   
-  // Clean location info
   const cleanedLocationInfo = cleanLocationInfo(currentLocation);
   
-  // Clean cart items
   const cleanItems = cart.map(item => {
     const cleanProduct = {};
     if (item.product) {
@@ -152,7 +151,6 @@ export const prepareOrderData = ({
     };
   });
 
-  // Build the raw order data
   const rawOrderData = {
     customerId: selectedCustomer.id,
     businessType,
@@ -163,6 +161,7 @@ export const prepareOrderData = ({
     remainingAmount: isAdvanceBilling ? remainingAmount : 0,
     items: cleanItems,
     paymentMethod: finalPaymentMethod,
+    bank: finalPaymentMethod !== 'Cash' ? selectedBank : undefined,
     subtotal: totals.subtotal,
     discount: totals.totalDiscount,
     discountPercentage: totals.discountPercentage,
@@ -171,6 +170,5 @@ export const prepareOrderData = ({
     total: totals.finalTotal,
   };
   
-  // Clean any undefined values
   return removeUndefinedDeep(rawOrderData);
 };

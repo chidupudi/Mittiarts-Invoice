@@ -24,8 +24,8 @@ import {
   InfoCircleOutlined,
   PayCircleOutlined
 } from '@ant-design/icons';
-const { Text } = Typography;
 
+const { Text } = Typography;
 const { Option } = Select;
 
 export const ProductModal = ({ 
@@ -237,8 +237,13 @@ export const PaymentModal = ({
   paymentMethod, 
   onPaymentMethodChange,
   businessType,
-  currentLocation
+  currentLocation,
+  banks,
+  selectedBank,
+  onBankChange,
 }) => {
+  const showBankSelection = paymentMethod && paymentMethod !== 'Cash';
+
   return (
     <Modal
       title={
@@ -266,12 +271,12 @@ export const PaymentModal = ({
           Confirm & Generate Invoice
         </Button>
       ]}
-      width={500}
+      width={showBankSelection ? 600 : 500}
     >
       <div style={{ padding: '20px 0' }}>
         <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
           <Row gutter={16} align="middle">
-            <Col span={12}>
+            <Col span={showBankSelection ? 8 : 12}>
               <Statistic
                 title="Total Amount"
                 value={totals.finalTotal}
@@ -280,7 +285,7 @@ export const PaymentModal = ({
                 valueStyle={{ color: '#52c41a', fontSize: '24px' }}
               />
             </Col>
-            <Col span={12}>
+            <Col span={showBankSelection ? 8 : 12}>
               <div>
                 <Text strong style={{ display: 'block', marginBottom: 8 }}>
                   Payment Method:
@@ -297,6 +302,26 @@ export const PaymentModal = ({
                 </Select>
               </div>
             </Col>
+            {showBankSelection && (
+              <Col span={8}>
+                <div>
+                  <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                    Bank:
+                  </Text>
+                  <Select
+                    value={selectedBank}
+                    onChange={onBankChange}
+                    style={{ width: '100%' }}
+                    size="large"
+                    placeholder="Select Bank"
+                  >
+                    {banks.map(bank => (
+                      <Option key={bank} value={bank}>{bank}</Option>
+                    ))}
+                  </Select>
+                </div>
+              </Col>
+            )}
           </Row>
         </Card>
 
@@ -403,8 +428,12 @@ export const AdvancePaymentModal = ({
   advanceAmount, 
   onAdvanceAmountChange, 
   remainingAmount, 
-  businessType 
+  businessType,
+  banks,
+  selectedBank,
+  onBankChange
 }) => {
+  const showBankSelection = paymentMethod && paymentMethod !== 'Cash';
   return (
     <Modal
       title={
@@ -481,7 +510,7 @@ export const AdvancePaymentModal = ({
 
         <Card size="small" style={{ marginBottom: 16 }}>
           <Row gutter={16} align="middle">
-            <Col span={12}>
+            <Col span={showBankSelection ? 8 : 12}>
               <Text strong>Advance Amount:</Text>
               <InputNumber
                 value={advanceAmount}
@@ -493,7 +522,7 @@ export const AdvancePaymentModal = ({
                 size="large"
               />
             </Col>
-            <Col span={12}>
+            <Col span={showBankSelection ? 8 : 12}>
               <Text strong>Payment Method:</Text>
               <Select
                 value={paymentMethod}
@@ -506,6 +535,22 @@ export const AdvancePaymentModal = ({
                 ))}
               </Select>
             </Col>
+            {showBankSelection && (
+              <Col span={8}>
+                <Text strong>Bank:</Text>
+                <Select
+                  value={selectedBank}
+                  onChange={onBankChange}
+                  style={{ width: '100%', marginTop: 8 }}
+                  size="large"
+                  placeholder="Select Bank"
+                >
+                  {banks.map(bank => (
+                    <Option key={bank} value={bank}>{bank}</Option>
+                  ))}
+                </Select>
+              </Col>
+            )}
           </Row>
         </Card>
 
@@ -541,8 +586,7 @@ export const AdvancePaymentModal = ({
   );
 };
 
-// Export a combined component for convenience
-const BillingModals = ({ 
+function BillingModals({
   showProductModal,
   productForm,
   handleAddDynamicProduct,
@@ -570,26 +614,29 @@ const BillingModals = ({
   advanceAmount,
   setAdvanceAmount,
   remainingAmount,
-  handleCloseAdvanceModal
-}) => {
+  handleCloseAdvanceModal,
+  banks,
+  selectedBank,
+  onBankChange
+}) {
   return (
     <>
-      <ProductModal 
+      <ProductModal
         visible={showProductModal}
         onCancel={handleCloseProductModal}
         onAddProduct={handleAddDynamicProduct}
         form={productForm}
         businessType={businessType}
       />
-      
-      <CustomerModal 
+
+      <CustomerModal
         visible={showCustomerModal}
         onCancel={handleCloseCustomerModal}
         onAddCustomer={handleAddDynamicCustomer}
         form={customerForm}
       />
-      
-      <PriceEditModal 
+
+      <PriceEditModal
         visible={showPriceModal}
         onCancel={handleClosePriceModal}
         onApply={applyNewPrice}
@@ -597,8 +644,8 @@ const BillingModals = ({
         newPrice={newPrice}
         onNewPriceChange={setNewPrice}
       />
-      
-      <PaymentModal 
+
+      <PaymentModal
         visible={showPaymentModal}
         onCancel={handleClosePaymentModal}
         onConfirm={confirmAndGenerateInvoice}
@@ -608,9 +655,12 @@ const BillingModals = ({
         onPaymentMethodChange={setFinalPaymentMethod}
         businessType={businessType}
         currentLocation={currentLocation}
+        banks={banks}
+        selectedBank={selectedBank}
+        onBankChange={onBankChange}
       />
-      
-      <AdvancePaymentModal 
+
+      <AdvancePaymentModal
         visible={showAdvanceModal}
         onCancel={handleCloseAdvanceModal}
         onConfirm={confirmAndGenerateInvoice}
@@ -622,9 +672,12 @@ const BillingModals = ({
         onAdvanceAmountChange={setAdvanceAmount}
         remainingAmount={remainingAmount}
         businessType={businessType}
+        banks={banks}
+        selectedBank={selectedBank}
+        onBankChange={onBankChange}
       />
     </>
   );
-};
+}
 
 export default BillingModals;

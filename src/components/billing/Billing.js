@@ -41,7 +41,7 @@ import CartDisplay from './CartDispaly';
 import OrderSummary from './OrderSummary';
 import AdvancePayment from './AdvancePayment';
 import LocationSelector from './LocationSelector';
-import BillingModals, { 
+import { 
   ProductModal, 
   CustomerModal, 
   PriceEditModal, 
@@ -53,8 +53,7 @@ import BillingModals, {
 import { 
   getProductPrice, 
   calculateTotals, 
-  calculateRemainingAmount,
-  prepareOrderData
+  prepareOrderData 
 } from './BillingHelpers';
 
 const { Title, Text } = Typography;
@@ -64,7 +63,7 @@ const Billing = () => {
   const dispatch = useDispatch();
 
   // Redux state
-  const { cart, loading, error } = useSelector(state => state.orders);
+  const { cart, loading } = useSelector(state => state.orders);
   const { items: customers } = useSelector(state => state.customers);
   const { items: products } = useSelector(state => state.products);
   const { branches, stalls } = useSelector(state => state.storefront);
@@ -94,9 +93,14 @@ const Billing = () => {
 
   // Payment confirmation states
   const [finalPaymentMethod, setFinalPaymentMethod] = useState('Cash');
+  const [selectedBank, setSelectedBank] = useState(undefined);
 
-  // Payment methods
-  const paymentMethods = ['Cash', 'Card', 'UPI', 'Bank Transfer', 'Cheque'];
+  const bankDetails = [
+    'Art of Indian pottery',
+    'Swadeshi pottery',
+    'Telangana Shilpakala',
+    'Clay Ganesha shoba',
+  ];
 
   // Load data on component mount
   useEffect(() => {
@@ -125,7 +129,6 @@ const Billing = () => {
   // Set default branch when locations are loaded
   useEffect(() => {
     if (locations.length > 0 && !selectedBranch) {
-      // Prioritize main branch, then any branch, then stalls
       const mainBranch = locations.find(loc => 
         loc.type === 'branch' && (
           loc.isMainBranch || 
@@ -142,7 +145,7 @@ const Billing = () => {
   // Update advance calculation when cart or advance amount changes
   useEffect(() => {
     updateAdvanceCalculation();
-  }, [cart, advanceAmount, isAdvanceBilling]);
+  }, [cart, advanceAmount, isAdvanceBilling, businessType]);
 
   // Get current location (branch or stall)
   const currentLocation = locations.find(l => l.id === selectedBranch) || locations[0];
@@ -206,7 +209,7 @@ const Billing = () => {
         name: values.name,
         phone: values.phone || '',
         email: values.email || '',
-        businessType: businessType, // Track if they're retail or wholesale customer
+        businessType: businessType,
         preferredBranch: selectedBranch,
         address: { street: '', city: '', state: '', pincode: '' }
       }));
@@ -227,13 +230,11 @@ const Billing = () => {
   const handleQuantityChange = (productId, newQuantity) => {
     if (newQuantity > 0) {
       dispatch(updateCartItemQuantity({ productId, quantity: newQuantity }));
-      updateAdvanceCalculation();
     }
   };
 
   const handleRemoveItem = (productId) => {
     dispatch(removeFromCart(productId));
-    updateAdvanceCalculation();
     message.success('Item removed from cart');
   };
 
@@ -261,12 +262,11 @@ const Billing = () => {
     } else if (difference < 0) {
       message.success(`Price increased by ₹${Math.abs(difference).toFixed(2)}`);
     } else {
-      message.success('Price updated!');
+      message.info('Price updated!');
     }
     
     setShowPriceModal(false);
     setEditingItem(null);
-    updateAdvanceCalculation();
   };
 
   // Advance payment calculation
@@ -292,6 +292,7 @@ const Billing = () => {
     }
 
     setFinalPaymentMethod('Cash');
+    setSelectedBank(undefined);
     
     if (isAdvanceBilling) {
       setShowAdvanceModal(true);
@@ -301,6 +302,11 @@ const Billing = () => {
   };
 
   const confirmAndGenerateInvoice = async () => {
+    if (finalPaymentMethod !== 'Cash' && !selectedBank) {
+      message.error('Please select a bank for the transaction.');
+      return;
+    }
+
     const orderData = prepareOrderData({
       cart,
       selectedCustomer,
@@ -310,7 +316,8 @@ const Billing = () => {
       isAdvanceBilling,
       advanceAmount,
       remainingAmount,
-      finalPaymentMethod
+      finalPaymentMethod,
+      selectedBank
     });
 
     const result = await dispatch(createOrder(orderData));
@@ -338,7 +345,6 @@ const Billing = () => {
 
   return (
     <div style={{ padding: 16, height: 'calc(100vh - 120px)', overflow: 'auto' }}>
-      {/* Header with Mitti Arts branding and business controls */}
       <div style={{ 
         background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)', 
         color: 'white', 
@@ -384,7 +390,6 @@ const Billing = () => {
       </div>
 
       <Row gutter={12} style={{ height: 'calc(100% - 80px)' }}>
-        {/* Left Panel - Product Selection & Cart */}
         <Col xs={24} lg={14} style={{ height: '100%' }}>
           <Card 
             title={
@@ -399,7 +404,6 @@ const Billing = () => {
             bodyStyle={{ flex: 1, overflow: 'hidden', padding: '12px' }}
             extra={
               <Space>
-                {/* Advance Billing Toggle */}
                 <Tooltip title="Enable advance billing for partial payments">
                   <Space>
                     <Switch 
@@ -436,7 +440,6 @@ const Billing = () => {
 
             <Divider style={{ margin: '12px 0' }} />
 
-            {/* Cart Display */}
             <div style={{ flex: 1, overflow: 'auto' }}>
               <Title level={5} style={{ margin: '0 0 8px 0' }}>
                 Shopping Cart ({totals.itemCount} items, {totals.totalQuantity} qty)
@@ -453,11 +456,8 @@ const Billing = () => {
           </Card>
         </Col>
 
-        {/* Right Panel - Customer & Checkout */}
         <Col xs={24} lg={10} style={{ height: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12 }}>
-            
-            {/* Customer Selection */}
             <CustomerSelection 
               selectedCustomer={selectedCustomer}
               customers={customers}
@@ -465,7 +465,6 @@ const Billing = () => {
               onShowCustomerModal={() => setShowCustomerModal(true)}
             />
 
-            {/* Advance Payment Section */}
             {isAdvanceBilling && (
               <AdvancePayment 
                 advanceAmount={advanceAmount}
@@ -475,7 +474,6 @@ const Billing = () => {
               />
             )}
 
-            {/* Order Summary */}
             <OrderSummary 
               cart={cart}
               businessType={businessType}
@@ -485,13 +483,12 @@ const Billing = () => {
               advanceAmount={advanceAmount}
               remainingAmount={remainingAmount}
               onSubmit={handleSubmit}
-              disabled={cart.length === 0 || !selectedCustomer}
+              disabled={loading || cart.length === 0 || !selectedCustomer}
             />
           </div>
         </Col>
       </Row>
 
-      {/* All Modals */}
       <ProductModal 
         visible={showProductModal}
         onCancel={handleCloseProductModal}
@@ -526,6 +523,9 @@ const Billing = () => {
         onPaymentMethodChange={setFinalPaymentMethod}
         businessType={businessType}
         currentLocation={currentLocation}
+        banks={bankDetails}
+        selectedBank={selectedBank}
+        onBankChange={setSelectedBank}
       />
       
       <AdvancePaymentModal 
@@ -540,6 +540,9 @@ const Billing = () => {
         onAdvanceAmountChange={setAdvanceAmount}
         remainingAmount={remainingAmount}
         businessType={businessType}
+        banks={bankDetails}
+        selectedBank={selectedBank}
+        onBankChange={setSelectedBank}
       />
     </div>
   );
