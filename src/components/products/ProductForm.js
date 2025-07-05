@@ -27,7 +27,7 @@ const ProductForm = ({ product, onClose }) => {
   const formik = useFormik({
     initialValues: {
       name: product?.name || '',
-      category: product?.category || 'Pottery',
+      category: product?.category || 'Clay Pots',
       price: product?.price || '',
       weight: product?.weight || '',
       costPrice: product?.costPrice || '',
@@ -134,13 +134,11 @@ const ProductForm = ({ product, onClose }) => {
               onBlur={formik.handleBlur}
               placeholder="Select product category"
             >
-              <Option value="Pottery">🏺 Pottery</Option>
-              <Option value="Terracotta">🟫 Terracotta</Option>
-              <Option value="Clay Art">🎨 Clay Art</Option>
-              <Option value="Decorative Items">✨ Decorative Items</Option>
-              <Option value="Garden Pottery">🌱 Garden Pottery</Option>
-              <Option value="Kitchen Pottery">🍽️ Kitchen Pottery</Option>
-              <Option value="Gifts & Souvenirs">🎁 Gifts & Souvenirs</Option>
+              <Option value="Clay Pots">🏺 Clay Pots</Option>
+              <Option value="Clay Ganesha">🌱 Clay Ganesha</Option>
+              <Option value="Fiber Statues">🎨Fiber Statues</Option>
+              <Option value="Machines">✨ Machines</Option>
+ 
               <Option value="Custom Orders">🛠️ Custom Orders</Option>
             </Select>
           </Form.Item>
