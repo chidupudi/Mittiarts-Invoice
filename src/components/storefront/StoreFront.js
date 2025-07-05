@@ -1,4 +1,4 @@
-// src/components/storefront/StoreFront.js - Complete Store & Branch Management
+// src/components/storefront/StoreFront.js - Updated with Firebase CRUD operations
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -27,7 +27,8 @@ import {
   Progress,
   message,
   Avatar,
-  Descriptions
+  Descriptions,
+  Spin
 } from 'antd';
 import {
   PlusOutlined,
@@ -51,9 +52,28 @@ import {
   TrophyOutlined,
   PlayCircleOutlined,
   PauseCircleOutlined,
-  EyeOutlined
+  EyeOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import moment from 'moment';
+import {
+  fetchMainStore,
+  updateMainStore,
+  fetchBranches,
+  createBranch,
+  updateBranch,
+  deleteBranch,
+  fetchStalls,
+  createStall,
+  updateStall,
+  deleteStall,
+  updateStallStatus,
+  updateStallRevenue,
+  clearError,
+  setBranchFilters,
+  setStallFilters,
+  updateAnalytics
+} from '../../features/storefront/storefrontSlice';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -61,220 +81,76 @@ const { TextArea } = Input;
 const { TabPane } = Tabs;
 const { RangePicker } = DatePicker;
 
+
 const StoreFront = () => {
   // Main state management
   const [activeTab, setActiveTab] = useState('branches');
   const [branches, setBranches] = useState([]);
-  const [stalls, setStalls] = useState([]);
+  const [stalls, setStalls] = useState([]); // Make sure this line exists
   const [mainStore, setMainStore] = useState(null);
-  
+
+  // Redux state (for analytics, filters, loading, error)
+  const dispatch = useDispatch();
+  const {
+    branchFilters,
+    stallFilters,
+    loading,
+    error,
+    analytics
+  } = useSelector(state => state.storefront);
+
   // Modal states
   const [branchModalOpen, setBranchModalOpen] = useState(false);
   const [stallModalOpen, setStallModalOpen] = useState(false);
   const [storeDetailsModalOpen, setStoreDetailsModalOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [selectedStall, setSelectedStall] = useState(null);
-  
+
   // Form instances
   const [branchForm] = Form.useForm();
   const [stallForm] = Form.useForm();
   const [storeForm] = Form.useForm();
 
   // Loading states
-  const [loading, setLoading] = useState(false);
   const [operationLoading, setOperationLoading] = useState(false);
 
-  // Initialize data
+  // Initialize data on component mount
   useEffect(() => {
     loadStoreFrontData();
   }, []);
 
+  // Update analytics when data changes
+  useEffect(() => {
+    if (branches.length > 0 || stalls.length > 0) {
+      dispatch(updateAnalytics());
+    }
+  }, [branches, stalls, dispatch]);
+
   const loadStoreFrontData = async () => {
-    setLoading(true);
     try {
-      // Load main store details
-      const mainStoreData = {
-        id: 'main_store',
-        name: 'Mitti Arts Headquarters',
-        type: 'main',
-        address: {
-          street: 'Plot No. 123, Banjara Hills, Road No. 12',
-          city: 'Hyderabad',
-          state: 'Telangana',
-          pincode: '500034',
-          country: 'India'
-        },
-        contact: {
-          phone: '+91 98765 43210',
-          email: 'info@mittiarts.com',
-          website: 'www.mittiarts.com'
-        },
-        gst: '36ABCDE1234F1Z5',
-        established: '2020-01-15',
-        owner: 'Rajesh Kumar',
-        status: 'active'
-      };
-      setMainStore(mainStoreData);
-
-      // Load branches
-      const branchesData = [
-        {
-          id: 'branch_001',
-          name: 'Main Showroom',
-          type: 'permanent',
-          address: {
-            street: 'Plot No. 123, Banjara Hills, Road No. 12',
-            city: 'Hyderabad',
-            state: 'Telangana',
-            pincode: '500034'
-          },
-          contact: {
-            phone: '+91 98765 43210',
-            email: 'sales@mittiarts.com'
-          },
-          manager: 'Suresh Reddy',
-          establishedDate: '2020-01-15',
-          status: 'active',
-          monthlyRevenue: 250000,
-          employeeCount: 8,
-          isMainBranch: true
-        },
-        {
-          id: 'branch_002',
-          name: 'Pottery Workshop',
-          type: 'permanent',
-          address: {
-            street: 'Survey No. 45, Madhapur, HITEC City',
-            city: 'Hyderabad',
-            state: 'Telangana',
-            pincode: '500081'
-          },
-          contact: {
-            phone: '+91 98765 43211',
-            email: 'workshop@mittiarts.com'
-          },
-          manager: 'Lakshmi Devi',
-          establishedDate: '2021-03-20',
-          status: 'active',
-          monthlyRevenue: 180000,
-          employeeCount: 12,
-          isMainBranch: false
-        },
-        {
-          id: 'branch_003',
-          name: 'Export Unit',
-          type: 'permanent',
-          address: {
-            street: 'Plot No. 67, Gachibowli, Export Promotion Industrial Park',
-            city: 'Hyderabad',
-            state: 'Telangana',
-            pincode: '500032'
-          },
-          contact: {
-            phone: '+91 98765 43212',
-            email: 'export@mittiarts.com'
-          },
-          manager: 'Vikram Singh',
-          establishedDate: '2022-05-10',
-          status: 'active',
-          monthlyRevenue: 320000,
-          employeeCount: 6,
-          isMainBranch: false
-        }
-      ];
-      setBranches(branchesData);
-
-      // Load stalls/temporary setups
-      const stallsData = [
-        {
-          id: 'stall_001',
-          name: 'Diwali Pottery Fair',
-          type: 'fair_stall',
-          location: 'Shilparamam Cultural Village, Madhapur',
-          eventName: 'Diwali Arts & Crafts Fair',
-          startDate: '2024-10-25',
-          endDate: '2024-11-05',
-          setup: {
-            date: '2024-10-24',
-            time: '09:00',
-            inPersonMaintainedBy: 'Ramesh Kumar'
-          },
-          checkout: {
-            date: '2024-11-05',
-            time: '18:00',
-            inPersonMaintainedBy: 'Ramesh Kumar'
-          },
-          status: 'active',
-          dailyRevenue: 15000,
-          totalRevenue: 165000,
-          expectedRevenue: 200000,
-          stallSize: '10x10 feet',
-          stallCost: 25000,
-          contact: {
-            phone: '+91 98765 43213',
-            coordinator: 'Ramesh Kumar'
-          }
-        },
-        {
-          id: 'stall_002',
-          name: 'Christmas Pottery Market',
-          type: 'seasonal_stall',
-          location: 'Forum Mall, Kukatpally',
-          eventName: 'Christmas Handicrafts Market',
-          startDate: '2024-12-15',
-          endDate: '2024-12-25',
-          setup: {
-            date: '2024-12-14',
-            time: '10:00',
-            inPersonMaintainedBy: 'Priya Sharma'
-          },
-          status: 'planned',
-          expectedRevenue: 120000,
-          stallSize: '8x8 feet',
-          stallCost: 18000,
-          contact: {
-            phone: '+91 98765 43214',
-            coordinator: 'Priya Sharma'
-          }
-        },
-        {
-          id: 'stall_003',
-          name: 'Summer Arts Festival',
-          type: 'fair_stall',
-          location: 'Hitex Exhibition Centre',
-          eventName: 'Hyderabad Summer Arts Festival',
-          startDate: '2024-05-15',
-          endDate: '2024-05-25',
-          setup: {
-            date: '2024-05-14',
-            time: '08:00',
-            inPersonMaintainedBy: 'Sunil Reddy'
-          },
-          checkout: {
-            date: '2024-05-25',
-            time: '20:00',
-            inPersonMaintainedBy: 'Sunil Reddy'
-          },
-          status: 'completed',
-          dailyRevenue: 12000,
-          totalRevenue: 132000,
-          expectedRevenue: 150000,
-          stallSize: '12x10 feet',
-          stallCost: 30000,
-          contact: {
-            phone: '+91 98765 43215',
-            coordinator: 'Sunil Reddy'
-          }
-        }
-      ];
-      setStalls(stallsData);
+      await Promise.all([
+        dispatch(fetchMainStore()),
+        dispatch(fetchBranches(branchFilters)),
+        dispatch(fetchStalls(stallFilters))
+      ]);
     } catch (error) {
       message.error('Failed to load store front data');
       console.error('Error loading store front data:', error);
-    } finally {
-      setLoading(false);
     }
   };
+
+  const handleRefresh = () => {
+    loadStoreFrontData();
+    message.success('Data refreshed successfully');
+  };
+
+  // Error handling
+  useEffect(() => {
+    if (error) {
+      message.error(error);
+      dispatch(clearError());
+    }
+  }, [error, dispatch]);
 
   // Branch management functions
   const handleAddBranch = () => {
@@ -288,14 +164,14 @@ const StoreFront = () => {
     branchForm.setFieldsValue({
       name: branch.name,
       type: branch.type,
-      street: branch.address.street,
-      city: branch.address.city,
-      state: branch.address.state,
-      pincode: branch.address.pincode,
-      phone: branch.contact.phone,
-      email: branch.contact.email,
+      street: branch.address?.street,
+      city: branch.address?.city,
+      state: branch.address?.state,
+      pincode: branch.address?.pincode,
+      phone: branch.contact?.phone,
+      email: branch.contact?.email,
       manager: branch.manager,
-      establishedDate: moment(branch.establishedDate),
+      establishedDate: branch.establishedDate ? moment(branch.establishedDate) : null,
       monthlyRevenue: branch.monthlyRevenue,
       employeeCount: branch.employeeCount
     });
@@ -308,7 +184,6 @@ const StoreFront = () => {
       const values = await branchForm.validateFields();
       
       const branchData = {
-        id: selectedBranch?.id || `branch_${Date.now()}`,
         name: values.name,
         type: values.type || 'permanent',
         address: {
@@ -322,20 +197,17 @@ const StoreFront = () => {
           email: values.email
         },
         manager: values.manager,
-        establishedDate: values.establishedDate.format('YYYY-MM-DD'),
-        status: 'active',
+        establishedDate: values.establishedDate ? values.establishedDate.format('YYYY-MM-DD') : null,
         monthlyRevenue: values.monthlyRevenue || 0,
         employeeCount: values.employeeCount || 1,
         isMainBranch: false
       };
 
       if (selectedBranch) {
-        // Update existing branch
-        setBranches(prev => prev.map(b => b.id === selectedBranch.id ? { ...branchData } : b));
+        await dispatch(updateBranch({ id: selectedBranch.id, branchData }));
         message.success('Branch updated successfully');
       } else {
-        // Add new branch
-        setBranches(prev => [...prev, branchData]);
+        await dispatch(createBranch(branchData));
         message.success('Branch added successfully');
       }
 
@@ -343,7 +215,11 @@ const StoreFront = () => {
       branchForm.resetFields();
       setSelectedBranch(null);
     } catch (error) {
-      message.error('Please fill all required fields');
+      if (error.errorFields) {
+        message.error('Please fill all required fields');
+      } else {
+        message.error('Error saving branch');
+      }
     } finally {
       setOperationLoading(false);
     }
@@ -352,7 +228,7 @@ const StoreFront = () => {
   const handleDeleteBranch = async (branchId) => {
     setOperationLoading(true);
     try {
-      setBranches(prev => prev.filter(b => b.id !== branchId));
+      await dispatch(deleteBranch(branchId));
       message.success('Branch deleted successfully');
     } catch (error) {
       message.error('Failed to delete branch');
@@ -376,10 +252,10 @@ const StoreFront = () => {
       location: stall.location,
       eventName: stall.eventName,
       dateRange: [moment(stall.startDate), moment(stall.endDate)],
-      setupDate: moment(stall.setup.date),
-      setupTime: stall.setup.time,
-      coordinator: stall.setup.inPersonMaintainedBy,
-      phone: stall.contact.phone,
+      setupDate: stall.setup?.date ? moment(stall.setup.date) : null,
+      setupTime: stall.setup?.time,
+      coordinator: stall.setup?.inPersonMaintainedBy || stall.contact?.coordinator,
+      phone: stall.contact?.phone,
       stallSize: stall.stallSize,
       stallCost: stall.stallCost,
       expectedRevenue: stall.expectedRevenue
@@ -387,31 +263,31 @@ const StoreFront = () => {
     setStallModalOpen(true);
   };
 
+  // Updated handleSaveStall function with proper error handling
   const handleSaveStall = async () => {
     setOperationLoading(true);
     try {
       const values = await stallForm.validateFields();
-      
       const stallData = {
         id: selectedStall?.id || `stall_${Date.now()}`,
-        name: values.name,
-        type: values.type,
-        location: values.location,
-        eventName: values.eventName,
+        name: values.name || '',
+        type: values.type || 'fair_stall',
+        location: values.location || '',
+        eventName: values.eventName || '',
         startDate: values.dateRange[0].format('YYYY-MM-DD'),
         endDate: values.dateRange[1].format('YYYY-MM-DD'),
         setup: {
           date: values.setupDate.format('YYYY-MM-DD'),
-          time: values.setupTime,
-          inPersonMaintainedBy: values.coordinator
+          time: values.setupTime || '09:00',
+          inPersonMaintainedBy: values.coordinator || ''
         },
         status: 'planned',
         expectedRevenue: values.expectedRevenue || 0,
-        stallSize: values.stallSize,
+        stallSize: values.stallSize || '10x10 feet',
         stallCost: values.stallCost || 0,
         contact: {
-          phone: values.phone,
-          coordinator: values.coordinator
+          phone: values.phone || '',
+          coordinator: values.coordinator || ''
         },
         totalRevenue: selectedStall?.totalRevenue || 0,
         dailyRevenue: selectedStall?.dailyRevenue || 0
@@ -431,6 +307,7 @@ const StoreFront = () => {
       stallForm.resetFields();
       setSelectedStall(null);
     } catch (error) {
+      console.error('Error saving stall:', error);
       message.error('Please fill all required fields');
     } finally {
       setOperationLoading(false);
@@ -440,7 +317,7 @@ const StoreFront = () => {
   const handleDeleteStall = async (stallId) => {
     setOperationLoading(true);
     try {
-      setStalls(prev => prev.filter(s => s.id !== stallId));
+      await dispatch(deleteStall(stallId));
       message.success('Stall deleted successfully');
     } catch (error) {
       message.error('Failed to delete stall');
@@ -449,11 +326,13 @@ const StoreFront = () => {
     }
   };
 
-  const handleStallStatusChange = (stallId, newStatus) => {
-    setStalls(prev => prev.map(s => 
-      s.id === stallId ? { ...s, status: newStatus } : s
-    ));
-    message.success(`Stall status updated to ${newStatus}`);
+  const handleStallStatusChange = async (stallId, newStatus) => {
+    try {
+      await dispatch(updateStallStatus({ id: stallId, status: newStatus }));
+      message.success(`Stall status updated to ${newStatus}`);
+    } catch (error) {
+      message.error('Failed to update stall status');
+    }
   };
 
   // Store details management
@@ -461,16 +340,16 @@ const StoreFront = () => {
     if (mainStore) {
       storeForm.setFieldsValue({
         name: mainStore.name,
-        street: mainStore.address.street,
-        city: mainStore.address.city,
-        state: mainStore.address.state,
-        pincode: mainStore.address.pincode,
-        phone: mainStore.contact.phone,
-        email: mainStore.contact.email,
-        website: mainStore.contact.website,
+        street: mainStore.address?.street,
+        city: mainStore.address?.city,
+        state: mainStore.address?.state,
+        pincode: mainStore.address?.pincode,
+        phone: mainStore.contact?.phone,
+        email: mainStore.contact?.email,
+        website: mainStore.contact?.website,
         gst: mainStore.gst,
         owner: mainStore.owner,
-        established: moment(mainStore.established)
+        established: mainStore.established ? moment(mainStore.established) : null
       });
       setStoreDetailsModalOpen(true);
     }
@@ -481,8 +360,7 @@ const StoreFront = () => {
     try {
       const values = await storeForm.validateFields();
       
-      const updatedStore = {
-        ...mainStore,
+      const storeData = {
         name: values.name,
         address: {
           street: values.street,
@@ -498,17 +376,41 @@ const StoreFront = () => {
         },
         gst: values.gst,
         owner: values.owner,
-        established: values.established.format('YYYY-MM-DD')
+        established: values.established ? values.established.format('YYYY-MM-DD') : null
       };
 
-      setMainStore(updatedStore);
+      await dispatch(updateMainStore(storeData));
       setStoreDetailsModalOpen(false);
       storeForm.resetFields();
       message.success('Store details updated successfully');
     } catch (error) {
-      message.error('Please fill all required fields');
+      if (error.errorFields) {
+        message.error('Please fill all required fields');
+      } else {
+        message.error('Error updating store details');
+      }
     } finally {
       setOperationLoading(false);
+    }
+  };
+
+  // Helper functions
+  const getStallColor = (type) => {
+    switch (type) {
+      case 'fair_stall': return '#fa8c16';
+      case 'seasonal_stall': return '#1890ff';
+      case 'exhibition': return '#722ed1';
+      default: return '#8c8c8c';
+    }
+  };
+
+  const getStallTagColor = (status) => {
+    switch (status) {
+      case 'active': return 'green';
+      case 'planned': return 'blue';
+      case 'completed': return 'purple';
+      case 'cancelled': return 'red';
+      default: return 'default';
     }
   };
 
@@ -531,8 +433,8 @@ const StoreFront = () => {
             )}
           </div>
           <div style={{ fontSize: '12px', color: '#666' }}>
-            <div><EnvironmentOutlined /> {record.address.street}, {record.address.city}</div>
-            <div><PhoneOutlined /> {record.contact.phone}</div>
+            <div><EnvironmentOutlined /> {record.address?.street}, {record.address?.city}</div>
+            <div><PhoneOutlined /> {record.contact?.phone}</div>
             <div><UserOutlined /> Manager: {record.manager}</div>
           </div>
         </div>
@@ -553,7 +455,7 @@ const StoreFront = () => {
           />
           <div style={{ marginTop: 8, fontSize: '12px' }}>
             <div><TeamOutlined /> {record.employeeCount} employees</div>
-            <div>Since: {moment(record.establishedDate).format('MMM YYYY')}</div>
+            <div>Since: {record.establishedDate ? moment(record.establishedDate).format('MMM YYYY') : 'N/A'}</div>
           </div>
         </div>
       ),
@@ -565,7 +467,7 @@ const StoreFront = () => {
       width: 100,
       render: (status) => (
         <Tag color={status === 'active' ? 'green' : 'red'}>
-          {status === 'active' ? 'ACTIVE' : 'INACTIVE'}
+          {(status || 'active').toUpperCase()}
         </Tag>
       ),
     },
@@ -618,13 +520,13 @@ const StoreFront = () => {
             />
             <Text strong style={{ fontSize: '14px' }}>{record.name}</Text>
             <Tag color={getStallTagColor(record.status)} size="small">
-              {record.status.toUpperCase()}
+              {(record.status || 'planned').toUpperCase()}
             </Tag>
           </div>
           <div style={{ fontSize: '12px', color: '#666' }}>
             <div><EnvironmentOutlined /> {record.location}</div>
             <div><CalendarOutlined /> {record.eventName}</div>
-            <div><UserOutlined /> {record.setup.inPersonMaintainedBy}</div>
+            <div><UserOutlined /> {record.setup?.inPersonMaintainedBy || record.contact?.coordinator}</div>
           </div>
         </div>
       ),
@@ -639,10 +541,12 @@ const StoreFront = () => {
             <div><strong>Duration:</strong></div>
             <div>{moment(record.startDate).format('DD MMM')} - {moment(record.endDate).format('DD MMM')}</div>
           </div>
-          <div style={{ fontSize: '12px' }}>
-            <div><strong>Setup:</strong></div>
-            <div>{moment(record.setup.date).format('DD MMM')} at {record.setup.time}</div>
-          </div>
+          {record.setup?.date && (
+            <div style={{ fontSize: '12px' }}>
+              <div><strong>Setup:</strong></div>
+              <div>{moment(record.setup.date).format('DD MMM')} at {record.setup.time}</div>
+            </div>
+          )}
           {record.checkout && (
             <div style={{ fontSize: '12px', marginTop: 4 }}>
               <div><strong>Checkout:</strong></div>
@@ -666,7 +570,7 @@ const StoreFront = () => {
             formatter={(value) => `${(value / 1000).toFixed(0)}k`}
           />
           <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>
-            <div>Cost: ₹{(record.stallCost / 1000).toFixed(0)}k</div>
+            <div>Cost: ₹{((record.stallCost || 0) / 1000).toFixed(0)}k</div>
             <div>Size: {record.stallSize}</div>
             {record.status === 'active' && record.dailyRevenue && (
               <div>Daily: ₹{(record.dailyRevenue / 1000).toFixed(0)}k</div>
@@ -736,31 +640,13 @@ const StoreFront = () => {
     },
   ];
 
-  // Helper functions
-  const getStallColor = (type) => {
-    switch (type) {
-      case 'fair_stall': return '#fa8c16';
-      case 'seasonal_stall': return '#1890ff';
-      case 'exhibition': return '#722ed1';
-      default: return '#8c8c8c';
-    }
-  };
-
-  const getStallTagColor = (status) => {
-    switch (status) {
-      case 'active': return 'green';
-      case 'planned': return 'blue';
-      case 'completed': return 'purple';
-      case 'cancelled': return 'red';
-      default: return 'default';
-    }
-  };
-
-  // Calculate statistics
-  const totalBranches = branches.length;
-  const totalRevenue = branches.reduce((sum, branch) => sum + branch.monthlyRevenue, 0);
-  const activeStalls = stalls.filter(stall => stall.status === 'active').length;
-  const stallRevenue = stalls.reduce((sum, stall) => sum + (stall.totalRevenue || 0), 0);
+  if (loading && (!mainStore && branches.length === 0 && stalls.length === 0)) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <Spin size="large" tip="Loading Mitti Arts store front data..." />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 24, backgroundColor: '#fafafa' }}>
@@ -799,18 +685,33 @@ const StoreFront = () => {
             </Text>
           </div>
         </div>
-        <Button
-          icon={<SettingOutlined />}
-          onClick={handleEditStoreDetails}
-          size="large"
-          style={{ 
-            background: 'rgba(255,255,255,0.2)',
-            borderColor: 'rgba(255,255,255,0.3)',
-            color: 'white'
-          }}
-        >
-          Store Settings
-        </Button>
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRefresh}
+            loading={loading}
+            size="large"
+            style={{ 
+              background: 'rgba(255,255,255,0.2)',
+              borderColor: 'rgba(255,255,255,0.3)',
+              color: 'white'
+            }}
+          >
+            Refresh
+          </Button>
+          <Button
+            icon={<SettingOutlined />}
+            onClick={handleEditStoreDetails}
+            size="large"
+            style={{ 
+              background: 'rgba(255,255,255,0.2)',
+              borderColor: 'rgba(255,255,255,0.3)',
+              color: 'white'
+            }}
+          >
+            Store Settings
+          </Button>
+        </Space>
       </div>
 
       {/* Summary Cards */}
@@ -819,7 +720,7 @@ const StoreFront = () => {
           <Card>
             <Statistic
               title="Total Branches"
-              value={totalBranches}
+              value={analytics.totalBranches}
               prefix={<ShopOutlined />}
               valueStyle={{ color: '#8b4513' }}
             />
@@ -829,7 +730,7 @@ const StoreFront = () => {
           <Card>
             <Statistic
               title="Monthly Revenue"
-              value={totalRevenue}
+              value={analytics.totalRevenue}
               prefix="₹"
               valueStyle={{ color: '#52c41a' }}
               formatter={(value) => `${(value / 100000).toFixed(1)}L`}
@@ -840,7 +741,7 @@ const StoreFront = () => {
           <Card>
             <Statistic
               title="Active Stalls"
-              value={activeStalls}
+              value={analytics.activeStalls}
               prefix={<TrophyOutlined />}
               valueStyle={{ color: '#fa8c16' }}
             />
@@ -850,7 +751,7 @@ const StoreFront = () => {
           <Card>
             <Statistic
               title="Stall Revenue"
-              value={stallRevenue}
+              value={analytics.stallRevenue}
               prefix="₹"
               valueStyle={{ color: '#1890ff' }}
               formatter={(value) => `${(value / 1000).toFixed(0)}k`}
@@ -878,6 +779,7 @@ const StoreFront = () => {
                 onClick={handleAddBranch}
                 size="large"
                 style={{ backgroundColor: '#8b4513', borderColor: '#8b4513' }}
+                loading={operationLoading}
               >
                 Add New Branch
               </Button>
@@ -908,6 +810,7 @@ const StoreFront = () => {
                 onClick={handleAddStall}
                 size="large"
                 style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
+                loading={operationLoading}
               >
                 Setup New Stall
               </Button>
