@@ -1,39 +1,19 @@
-//  src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management
+//  src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management with Dynamic Branches
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import firebaseService from '../../services/firebaseService';
 import invoiceService from '../../services/invoiceService';
 import { updateStock } from '../products/productSlice';
 import { updateCustomerStats } from '../customer/customerSlice';
 
-// Mitti Arts branch configuration
-const MITTI_ARTS_BRANCHES = {
-  'main_showroom': {
-    id: 'main_showroom',
-    name: 'Main Showroom',
-    address: 'Plot No. 123, Banjara Hills, Road No. 12, Hyderabad - 500034',
-    phone: '+91 98765 43210',
-    email: 'sales@mittiarts.com',
-    gst: '36ABCDE1234F1Z5',
-    icon: '🏪'
-  },
-  'pottery_workshop': {
-    id: 'pottery_workshop',
-    name: 'Pottery Workshop',
-    address: 'Survey No. 45, Madhapur, HITEC City, Hyderabad - 500081',
-    phone: '+91 98765 43211',
-    email: 'workshop@mittiarts.com',
-    gst: '36ABCDE1234F1Z6',
-    icon: '🏺'
-  },
-  'export_unit': {
-    id: 'export_unit',
-    name: 'Export Unit',
-    address: 'Plot No. 67, Gachibowli, Export Promotion Industrial Park, Hyderabad - 500032',
-    phone: '+91 98765 43212',
-    email: 'export@mittiarts.com',
-    gst: '36ABCDE1234F1Z7',
-    icon: '📦'
-  }
+// Default branch info for fallback
+const DEFAULT_BRANCH_INFO = {
+  id: 'default',
+  name: 'Mitti Arts Main Store',
+  address: 'Hyderabad, Telangana',
+  phone: '+91 98765 43210',
+  email: 'info@mittiarts.com',
+  gst: '36ABCDE1234F1Z5',
+  icon: '🏪'
 };
 
 // Fetch all orders with enhanced filtering for Mitti Arts
@@ -126,7 +106,7 @@ export const fetchOrders = createAsyncThunk(
         const enrichedOrder = {
           ...order,
           customer: order.customerId ? customers[order.customerId] : null,
-          branchInfo: MITTI_ARTS_BRANCHES[order.branch] || MITTI_ARTS_BRANCHES['main_showroom']
+          branchInfo: order.branchInfo || DEFAULT_BRANCH_INFO
         };
 
         // Calculate payment status for advance billing
@@ -167,11 +147,12 @@ export const createOrder = createAsyncThunk(
         throw new Error('Branch selection is required');
       }
 
-      // Get branch information
-      const branchInfo = MITTI_ARTS_BRANCHES[orderData.branch];
-      if (!branchInfo) {
-        throw new Error('Invalid branch selected');
-      }
+      // Use provided branch info or create default
+      const branchInfo = orderData.branchInfo || {
+        ...DEFAULT_BRANCH_INFO,
+        id: orderData.branch,
+        name: `Branch ${orderData.branch}`
+      };
 
       // Calculate enhanced totals for Mitti Arts
       const subtotal = orderData.subtotal || orderData.items.reduce((sum, item) => 
@@ -202,12 +183,9 @@ export const createOrder = createAsyncThunk(
         remainingAmount = finalTotal - advanceAmount;
       }
 
-      // Generate order number with branch prefix
-      const branchPrefix = {
-        'main_showroom': 'MS',
-        'pottery_workshop': 'PW',
-        'export_unit': 'EU'
-      }[orderData.branch] || 'MA';
+      // Generate order number with dynamic branch prefix
+      const branchPrefix = branchInfo.name ? 
+        branchInfo.name.split(' ').map(word => word.charAt(0)).join('').toUpperCase().slice(0, 2) : 'MA';
       
       const orderNumber = `${branchPrefix}-${Date.now().toString().slice(-8)}`;
 
@@ -390,7 +368,7 @@ export const getOrder = createAsyncThunk(
 
       // Enrich with branch info if missing
       if (!order.branchInfo && order.branch) {
-        order.branchInfo = MITTI_ARTS_BRANCHES[order.branch] || MITTI_ARTS_BRANCHES['main_showroom'];
+        order.branchInfo = DEFAULT_BRANCH_INFO;
       }
 
       // Calculate payment status for advance orders
@@ -584,10 +562,10 @@ const initialState = {
   
   // Enhanced state for Mitti Arts
   businessType: 'retail', // Default to retail
-  selectedBranch: 'main_showroom', // Default branch
+  selectedBranch: null, // Will be set dynamically
   cartBusiness: {
     type: 'retail',
-    branch: 'main_showroom'
+    branch: null
   },
   
   // Advance billing state
