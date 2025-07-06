@@ -1,4 +1,3 @@
-// src/components/advance-payments/AdvancePaymentHistory.js
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -34,10 +33,10 @@ import {
   EyeOutlined,
   PrinterOutlined
 } from '@ant-design/icons';
-import { 
+import {
   getAdvancePaymentRecords,
   getAdvanceCompletions,
-  calculateAdvanceAnalytics 
+  calculateAdvanceAnalytics
 } from '../../features/order/orderSlice';
 import moment from 'moment';
 
@@ -48,7 +47,7 @@ const { Option } = Select;
 const AdvancePaymentHistory = ({ orderId = null, showFilters = true }) => {
   const dispatch = useDispatch();
   const { paymentRecords = [], advanceCompletions = [], advanceAnalytics = {}, loading } = useSelector(state => state.orders);
-  
+
   const [filters, setFilters] = useState({
     dateRange: [],
     businessType: '',
@@ -128,7 +127,7 @@ const AdvancePaymentHistory = ({ orderId = null, showFilters = true }) => {
       const headers = Object.keys(csvData[0] || {});
       const csvContent = [
         headers.join(','),
-        ...csvData.map(row => 
+        ...csvData.map(row =>
           headers.map(header => `"${row[header] || ''}"`).join(',')
         )
       ].join('\n');
@@ -403,7 +402,7 @@ const AdvancePaymentHistory = ({ orderId = null, showFilters = true }) => {
                 pagination={{
                   pageSize: 10,
                   showSizeChanger: true,
-                  showTotal: (total, range) => 
+                  showTotal: (total, range) =>
                     `${range[0]}-${range[1]} of ${total} payments`
                 }}
                 scroll={{ x: 'max-content' }}
