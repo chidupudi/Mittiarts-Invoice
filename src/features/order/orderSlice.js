@@ -1,5 +1,6 @@
-//  src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management with Dynamic Branches
+// src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management with Dynamic Branches
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import moment from 'moment'; // Imported for date calculations in analytics
 import firebaseService from '../../services/firebaseService';
 import invoiceService from '../../services/invoiceService';
 import { updateStock } from '../products/productSlice';
@@ -386,13 +387,20 @@ export const getOrder = createAsyncThunk(
   }
 );
 
-// Complete advance payment
+// [NEW & ENHANCED] Complete advance payment with new invoice generation
 export const completeAdvancePayment = createAsyncThunk(
   'orders/completeAdvance',
-  async ({ orderId, paymentAmount, paymentMethod }, { rejectWithValue, dispatch }) => {
+  async ({ orderId, paymentAmount, paymentMethod, bankDetails, notes }, { rejectWithValue, dispatch }) => {
     try {
+      console.log('Processing advance payment completion:', { orderId, paymentAmount, paymentMethod });
+
+      // Get the current order
       const order = await firebaseService.getById('orders', orderId);
       
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
       if (!order.isAdvanceBilling) {
         throw new Error('This is not an advance billing order');
       }
@@ -405,34 +413,133 @@ export const completeAdvancePayment = createAsyncThunk(
         throw new Error('Payment amount exceeds remaining balance');
       }
 
-      const newAdvanceAmount = order.advanceAmount + paymentAmount;
+      if (paymentAmount <= 0) {
+        throw new Error('Payment amount must be greater than 0');
+      }
+
+      // Calculate new amounts
+      const newAdvanceAmount = (order.advanceAmount || 0) + paymentAmount;
       const newRemainingAmount = order.total - newAdvanceAmount;
       const isFullyPaid = newRemainingAmount <= 0;
 
-      const updatedOrder = await firebaseService.update('orders', orderId, {
+      // Create payment record for tracking
+      const paymentRecord = {
+        orderId: orderId,
+        orderNumber: order.orderNumber,
+        customerId: order.customerId,
+        paymentAmount: paymentAmount,
+        paymentMethod: paymentMethod,
+        bankDetails: bankDetails || null,
+        notes: notes || '',
+        paymentDate: new Date(),
+        previousBalance: order.remainingAmount,
+        newBalance: newRemainingAmount,
+        isFullPayment: isFullyPaid,
+        paymentType: 'advance_completion',
+        branchInfo: order.branchInfo,
+        businessType: order.businessType
+      };
+
+      // Store payment record
+      await firebaseService.create('advance_payment_records', paymentRecord);
+
+      // Update the order with new payment information
+      const orderUpdate = {
         advanceAmount: newAdvanceAmount,
         remainingAmount: newRemainingAmount,
         paymentStatus: isFullyPaid ? 'complete' : 'partial',
-        ...(isFullyPaid && { 
-          isAdvanceBilling: false, 
-          completedAt: new Date(),
-          finalPaymentMethod: paymentMethod
-        }),
+        lastPaymentDate: new Date(),
+        lastPaymentMethod: paymentMethod,
+        lastPaymentAmount: paymentAmount,
         updatedAt: new Date()
-      });
+      };
 
-      // Update advance payment record
-      try {
-        await updateAdvancePaymentRecord(orderId, {
-          paidAmount: newAdvanceAmount,
-          remainingAmount: newRemainingAmount,
-          status: isFullyPaid ? 'completed' : 'partial',
-          lastPaymentDate: new Date(),
-          lastPaymentMethod: paymentMethod
-        });
-      } catch (error) {
-        console.warn('Failed to update advance payment record:', error);
+      // If fully paid, mark as completed and generate final invoice
+      if (isFullyPaid) {
+        orderUpdate.isAdvanceBilling = false; // No longer advance billing
+        orderUpdate.status = 'completed';
+        orderUpdate.completedAt = new Date();
+        orderUpdate.finalPaymentMethod = paymentMethod;
+        orderUpdate.finalPaymentDate = new Date();
+
+        // Generate completion invoice data
+        const completionInvoiceData = {
+          ...order,
+          ...orderUpdate,
+          invoiceType: 'completion',
+          originalAdvanceInvoiceId: order.id,
+          finalPaymentAmount: paymentAmount,
+          finalPaymentMethod: paymentMethod,
+          finalPaymentDate: new Date(),
+          
+          // New invoice number for the completion
+          invoiceNumber: `${order.orderNumber}-FINAL`,
+          orderNumber: `${order.orderNumber}-FINAL`,
+          
+          // Payment breakdown for the completion invoice
+          paymentBreakdown: {
+            totalOrderAmount: order.total,
+            previousAdvanceAmount: order.advanceAmount,
+            finalPaymentAmount: paymentAmount,
+            paymentMethod: paymentMethod,
+            bankDetails: bankDetails
+          }
+        };
+
+        // Create the completion invoice
+        try {
+          await invoiceService.createInvoice(completionInvoiceData);
+          console.log('Completion invoice generated successfully');
+        } catch (invoiceError) {
+          console.error('Failed to create completion invoice:', invoiceError);
+          // Don't fail the payment if invoice creation fails
+        }
+
+        // Create advance payment completion record
+        const completionRecord = {
+          originalOrderId: orderId,
+          originalOrderNumber: order.orderNumber,
+          completionDate: new Date(),
+          finalPaymentAmount: paymentAmount,
+          finalPaymentMethod: paymentMethod,
+          totalAdvanceAmount: newAdvanceAmount,
+          totalOrderAmount: order.total,
+          customerId: order.customerId,
+          customerName: order.customer?.name || 'Walk-in Customer',
+          branchInfo: order.branchInfo,
+          businessType: order.businessType,
+          items: order.items,
+          completionInvoiceGenerated: true,
+          status: 'completed'
+        };
+
+        await firebaseService.create('advance_completions', completionRecord);
       }
+
+      // Update the original order
+      const updatedOrder = await firebaseService.update('orders', orderId, orderUpdate);
+
+      // Enrich the order with customer data for return
+      if (order.customerId) {
+        try {
+          const customer = await firebaseService.getById('customers', order.customerId);
+          updatedOrder.customer = customer;
+        } catch (error) {
+          console.warn('Could not fetch customer data:', error);
+          updatedOrder.customer = order.customer; // Use existing customer data
+        }
+      }
+
+      // Add payment completion flag for UI feedback
+      updatedOrder.paymentJustCompleted = isFullyPaid;
+      updatedOrder.latestPaymentAmount = paymentAmount;
+
+      console.log('Advance payment processed successfully:', {
+        orderId,
+        isFullyPaid,
+        newAdvanceAmount,
+        newRemainingAmount
+      });
 
       return updatedOrder;
     } catch (error) {
@@ -441,6 +548,229 @@ export const completeAdvancePayment = createAsyncThunk(
     }
   }
 );
+
+// [NEW] Get advance payment history for an order
+export const getAdvancePaymentHistory = createAsyncThunk(
+  'orders/getAdvanceHistory',
+  async (orderId, { rejectWithValue }) => {
+    try {
+      const paymentRecords = await firebaseService.getAll('advance_payment_records', {
+        where: [{ field: 'orderId', operator: '==', value: orderId }],
+        orderBy: { field: 'paymentDate', direction: 'desc' }
+      });
+
+      return paymentRecords;
+    } catch (error) {
+      console.error('Error fetching advance payment history:', error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// [NEW] Get all advance payment records for reporting
+export const getAdvancePaymentRecords = createAsyncThunk(
+  'orders/getAdvanceRecords',
+  async (filters = {}, { rejectWithValue }) => {
+    try {
+      const options = {
+        orderBy: { field: 'paymentDate', direction: 'desc' }
+      };
+
+      const whereConditions = [];
+
+      if (filters.startDate) {
+        whereConditions.push({ 
+          field: 'paymentDate', 
+          operator: '>=', 
+          value: new Date(filters.startDate) 
+        });
+      }
+
+      if (filters.endDate) {
+        whereConditions.push({ 
+          field: 'paymentDate', 
+          operator: '<=', 
+          value: new Date(filters.endDate) 
+        });
+      }
+
+      if (filters.customerId) {
+        whereConditions.push({ 
+          field: 'customerId', 
+          operator: '==', 
+          value: filters.customerId 
+        });
+      }
+
+      if (filters.businessType) {
+        whereConditions.push({ 
+          field: 'businessType', 
+          operator: '==', 
+          value: filters.businessType 
+        });
+      }
+
+      if (whereConditions.length > 0) {
+        options.where = whereConditions;
+      }
+
+      const records = await firebaseService.getAll('advance_payment_records', options);
+      
+      // Apply client-side search if needed
+      let filteredRecords = records;
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        filteredRecords = records.filter(record => 
+          record.orderNumber?.toLowerCase().includes(searchTerm) ||
+          record.customerName?.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      return filteredRecords;
+    } catch (error) {
+      console.error('Error fetching advance payment records:', error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// [NEW] Get advance completion records
+export const getAdvanceCompletions = createAsyncThunk(
+  'orders/getAdvanceCompletions',
+  async (filters = {}, { rejectWithValue }) => {
+    try {
+      const options = {
+        orderBy: { field: 'completionDate', direction: 'desc' }
+      };
+
+      const whereConditions = [];
+
+      if (filters.startDate) {
+        whereConditions.push({ 
+          field: 'completionDate', 
+          operator: '>=', 
+          value: new Date(filters.startDate) 
+        });
+      }
+
+      if (filters.endDate) {
+        whereConditions.push({ 
+          field: 'completionDate', 
+          operator: '<=', 
+          value: new Date(filters.endDate) 
+        });
+      }
+
+      if (whereConditions.length > 0) {
+        options.where = whereConditions;
+      }
+
+      return await firebaseService.getAll('advance_completions', options);
+    } catch (error) {
+      console.error('Error fetching advance completions:', error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// [NEW] Calculate advance payment analytics
+export const calculateAdvanceAnalytics = createAsyncThunk(
+  'orders/calculateAdvanceAnalytics',
+  async (dateRange = {}, { rejectWithValue, getState }) => {
+    try {
+      const { orders } = getState();
+      const allOrders = orders.items;
+
+      // Filter advance orders
+      const advanceOrders = allOrders.filter(order => order.isAdvanceBilling);
+      const pendingAdvances = advanceOrders.filter(order => order.remainingAmount > 0);
+      const completedAdvances = advanceOrders.filter(order => order.remainingAmount <= 0);
+
+      // Calculate totals
+      const totalPendingAmount = pendingAdvances.reduce((sum, order) => sum + (order.remainingAmount || 0), 0);
+      const totalAdvanceCollected = advanceOrders.reduce((sum, order) => sum + (order.advanceAmount || 0), 0);
+      const totalOrderValue = advanceOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+
+      // Calculate overdue payments
+      const overduePayments = pendingAdvances.filter(order => {
+        const orderDate = moment(order.createdAt?.toDate?.() || order.createdAt);
+        const dueDate = orderDate.clone().add(order.businessType === 'wholesale' ? 30 : 7, 'days');
+        return moment().isAfter(dueDate);
+      });
+
+      // Branch-wise analytics
+      const branchAnalytics = {};
+      advanceOrders.forEach(order => {
+        const branchName = order.branchInfo?.name || 'Unknown';
+        if (!branchAnalytics[branchName]) {
+          branchAnalytics[branchName] = {
+            totalOrders: 0,
+            pendingOrders: 0,
+            completedOrders: 0,
+            totalAdvanceAmount: 0,
+            totalPendingAmount: 0,
+            totalOrderValue: 0
+          };
+        }
+
+        const branch = branchAnalytics[branchName];
+        branch.totalOrders += 1;
+        branch.totalAdvanceAmount += order.advanceAmount || 0;
+        branch.totalOrderValue += order.total || 0;
+
+        if (order.remainingAmount > 0) {
+          branch.pendingOrders += 1;
+          branch.totalPendingAmount += order.remainingAmount;
+        } else {
+          branch.completedOrders += 1;
+        }
+      });
+
+      // Business type analytics
+      const businessTypeAnalytics = {
+        retail: {
+          totalOrders: advanceOrders.filter(o => o.businessType === 'retail').length,
+          totalAdvance: advanceOrders.filter(o => o.businessType === 'retail').reduce((sum, o) => sum + (o.advanceAmount || 0), 0),
+          averageAdvance: 0
+        },
+        wholesale: {
+          totalOrders: advanceOrders.filter(o => o.businessType === 'wholesale').length,
+          totalAdvance: advanceOrders.filter(o => o.businessType === 'wholesale').reduce((sum, o) => sum + (o.advanceAmount || 0), 0),
+          averageAdvance: 0
+        }
+      };
+
+      // Calculate averages
+      if (businessTypeAnalytics.retail.totalOrders > 0) {
+        businessTypeAnalytics.retail.averageAdvance = businessTypeAnalytics.retail.totalAdvance / businessTypeAnalytics.retail.totalOrders;
+      }
+      if (businessTypeAnalytics.wholesale.totalOrders > 0) {
+        businessTypeAnalytics.wholesale.averageAdvance = businessTypeAnalytics.wholesale.totalAdvance / businessTypeAnalytics.wholesale.totalOrders;
+      }
+
+      return {
+        summary: {
+          totalAdvanceOrders: advanceOrders.length,
+          pendingAdvances: pendingAdvances.length,
+          completedAdvances: completedAdvances.length,
+          totalPendingAmount,
+          totalAdvanceCollected,
+          totalOrderValue,
+          overduePayments: overduePayments.length,
+          advancePercentage: totalOrderValue > 0 ? (totalAdvanceCollected / totalOrderValue) * 100 : 0
+        },
+        branchAnalytics,
+        businessTypeAnalytics,
+        overduePayments,
+        recentCompletions: completedAdvances.slice(0, 5)
+      };
+    } catch (error) {
+      console.error('Error calculating advance analytics:', error);
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 
 // Cancel order with enhanced logic
 export const cancelOrder = createAsyncThunk(
@@ -568,17 +898,21 @@ const initialState = {
     branch: null
   },
   
-  // Advance billing state
+  // Advance billing and payment history state
   advanceOrders: [],
   pendingPayments: [],
-  
+  paymentHistory: [],
+  paymentRecords: [],
+  advanceCompletions: [],
+
   // Analytics state
   analytics: {
     dailySales: {},
     branchPerformance: {},
     businessTypeStats: {},
     customerSegments: {}
-  }
+  },
+  advanceAnalytics: {} // New state for advance payment analytics
 };
 
 const orderSlice = createSlice({
@@ -678,6 +1012,17 @@ const orderSlice = createSlice({
       state.analytics = { ...state.analytics, ...action.payload };
     },
     
+    // [NEW] Advance Analytics reducers
+    setAdvanceAnalytics: (state, action) => {
+      state.advanceAnalytics = action.payload;
+    },
+    
+    clearAdvanceState: (state) => {
+      state.advanceOrders = [];
+      state.pendingPayments = [];
+      state.advanceAnalytics = {};
+    },
+
     clearError: (state) => {
       state.error = null;
     }
@@ -760,8 +1105,13 @@ const orderSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Complete advance payment
+      // [NEW] Complete advance payment extra reducers
+      .addCase(completeAdvancePayment.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(completeAdvancePayment.fulfilled, (state, action) => {
+        state.loading = false;
         const index = state.items.findIndex(item => item.id === action.payload.id);
         if (index !== -1) {
           state.items[index] = action.payload;
@@ -769,16 +1119,37 @@ const orderSlice = createSlice({
         if (state.currentOrder?.id === action.payload.id) {
           state.currentOrder = action.payload;
         }
-        
+
         // Update advance orders list
         state.advanceOrders = state.items.filter(order => 
           order.isAdvanceBilling && order.remainingAmount > 0
         );
-        
+
         state.error = null;
       })
       .addCase(completeAdvancePayment.rejected, (state, action) => {
+        state.loading = false;
         state.error = action.payload;
+      })
+
+      // [NEW] Get advance payment history
+      .addCase(getAdvancePaymentHistory.fulfilled, (state, action) => {
+        state.paymentHistory = action.payload;
+      })
+
+      // [NEW] Get advance payment records
+      .addCase(getAdvancePaymentRecords.fulfilled, (state, action) => {
+        state.paymentRecords = action.payload;
+      })
+
+      // [NEW] Get advance completions
+      .addCase(getAdvanceCompletions.fulfilled, (state, action) => {
+        state.advanceCompletions = action.payload;
+      })
+
+      // [NEW] Calculate advance analytics
+      .addCase(calculateAdvanceAnalytics.fulfilled, (state, action) => {
+        state.advanceAnalytics = action.payload;
       })
       
       // Cancel order
@@ -809,6 +1180,8 @@ export const {
   updateAdvanceOrders,
   updatePendingPayments,
   updateAnalytics,
+  setAdvanceAnalytics, // New export
+  clearAdvanceState,   // New export
   clearError
 } = orderSlice.actions;
 
