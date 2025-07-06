@@ -1,4 +1,4 @@
-// src/components/dashboard/DashboardLayout.js - Mobile Optimized with Store Front
+// src/components/dashboard/DashboardLayout.js - Updated with Advance Payments
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -29,6 +29,7 @@ import {
   FilePdfOutlined,
   CloseOutlined,
   HomeOutlined,
+  PayCircleOutlined,
 } from '@ant-design/icons';
 
 import { logoutUser } from '../../features/auth/authSlice';
@@ -44,6 +45,7 @@ const menuItems = [
   { key: 'billing', path: '/billing', label: 'Billing', icon: <ShoppingCartOutlined />, color: '#ed6c02' },
   { key: 'orders', path: '/orders', label: 'Orders', icon: <FileTextOutlined />, color: '#0288d1' },
   { key: 'invoices', path: '/invoices', label: 'Invoices', icon: <FilePdfOutlined />, color: '#7b1fa2' },
+  { key: 'advance-payments', path: '/advance-payments', label: 'Advance Payments', icon: <PayCircleOutlined />, color: '#fa8c16' },
   { key: 'storefront', path: '/storefront', label: 'Store Front', icon: <HomeOutlined />, color: '#8b4513' },
 ];
 
@@ -81,6 +83,7 @@ const DashboardLayout = ({ children }) => {
       if (location.pathname === item.path) return item.key;
       if (item.key === 'invoices' && location.pathname.startsWith('/invoices')) return 'invoices';
       if (item.key === 'storefront' && location.pathname.startsWith('/storefront')) return 'storefront';
+      if (item.key === 'advance-payments' && location.pathname.startsWith('/advance-payments')) return 'advance-payments';
     }
     return 'dashboard';
   })();

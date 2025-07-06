@@ -1,4 +1,4 @@
-// src/components/customer/CustomerForm.js - Enhanced version
+// src/components/customer/CustomerForm.js - Updated with 2 phone numbers
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -38,7 +38,8 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
       form.setFieldsValue({
         name: selectedCustomer.name || '',
         email: selectedCustomer.email || '',
-        phone: selectedCustomer.phone || '',
+        phone1: selectedCustomer.phone1 || selectedCustomer.phone || '', // Support old single phone field
+        phone2: selectedCustomer.phone2 || '',
         street: selectedCustomer.address?.street || '',
         city: selectedCustomer.address?.city || '',
         state: selectedCustomer.address?.state || '',
@@ -66,10 +67,20 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
         return;
       }
 
+      // Validate at least one phone number
+      if (!values.phone1 || values.phone1.trim() === '') {
+        message.error('At least one phone number is required');
+        setSubmitting(false);
+        return;
+      }
+
       const customerData = {
         name: values.name.trim(),
         email: values.email?.trim() || '',
-        phone: values.phone?.trim() || '',
+        phone1: values.phone1?.trim() || '',
+        phone2: values.phone2?.trim() || '',
+        // Keep phone field for backward compatibility
+        phone: values.phone1?.trim() || '',
         address: {
           street: values.street?.trim() || '',
           city: values.city?.trim() || '',
@@ -177,15 +188,16 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
               
               <Col span={12}>
                 <Form.Item
-                  label="Phone Number"
-                  name="phone"
+                  label="Primary Phone Number"
+                  name="phone1"
                   rules={[
+                    { required: true, message: 'Primary phone number is required' },
                     { pattern: /^[6-9]\d{9}$/, message: 'Enter valid 10-digit phone number' }
                   ]}
                 >
                   <Input
                     prefix={<PhoneOutlined style={{ color: '#52c41a' }} />}
-                    placeholder="Enter phone number (optional)"
+                    placeholder="Enter primary phone number"
                     size="large"
                     maxLength={10}
                   />
@@ -193,6 +205,23 @@ const CustomerForm = ({ open, onClose, onSuccess }) => {
               </Col>
               
               <Col span={12}>
+                <Form.Item
+                  label="Secondary Phone Number"
+                  name="phone2"
+                  rules={[
+                    { pattern: /^[6-9]\d{9}$/, message: 'Enter valid 10-digit phone number' }
+                  ]}
+                >
+                  <Input
+                    prefix={<PhoneOutlined style={{ color: '#52c41a' }} />}
+                    placeholder="Enter secondary phone number (optional)"
+                    size="large"
+                    maxLength={10}
+                  />
+                </Form.Item>
+              </Col>
+              
+              <Col span={24}>
                 <Form.Item
                   label="Email Address"
                   name="email"

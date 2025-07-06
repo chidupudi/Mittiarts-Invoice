@@ -1,4 +1,4 @@
-// src/App.js - Updated with StoreFront routing
+// src/App.js - Updated with Advance Payments routing
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -23,6 +23,7 @@ import Billing from './components/billing/Billing';
 import Invoice from './components/billing/Invoice';
 import InvoiceList from './components/billing/InvoiceList';
 import StoreFront from './components/storefront/StoreFront';
+import AdvancePayments from './components/advance-payments/AdvancePayments';
 
 const antdTheme = {
   token: {
@@ -161,7 +162,11 @@ function AppContent() {
                   <Route path="/invoices" element={<InvoiceList />} />
                   <Route path="/invoices/:id" element={<Invoice />} />
                   
-                  {/* Store Front Management - NEW */}
+                  {/* Advance Payments Management - NEW */}
+                  <Route path="/advance-payments" element={<AdvancePayments />} />
+                  <Route path="/advance-payments/*" element={<AdvancePayments />} />
+                  
+                  {/* Store Front Management */}
                   <Route path="/storefront" element={<StoreFront />} />
                   <Route path="/storefront/*" element={<StoreFront />} />
                   

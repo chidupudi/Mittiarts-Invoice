@@ -1,4 +1,4 @@
-// src/components/customer/CustomerList.js - Enhanced Mitti Arts Customer Management
+// src/components/customer/CustomerList.js - Updated to show both phone numbers
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -279,17 +279,31 @@ const CustomerList = () => {
               </div>
               
               <div style={{ marginBottom: 4 }}>
-                {record.phone && (
-                  <Text style={{ fontSize: '12px', color: '#666', marginRight: 12 }}>
+                {/* Display both phone numbers */}
+                {record.phone1 && (
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: 2 }}>
+                    <PhoneOutlined style={{ marginRight: 4, color: '#52c41a' }} />
+                    <Text style={{ fontWeight: 'bold' }}>Primary:</Text> {record.phone1}
+                  </div>
+                )}
+                {record.phone2 && (
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: 2 }}>
+                    <PhoneOutlined style={{ marginRight: 4, color: '#1890ff' }} />
+                    <Text style={{ fontWeight: 'bold' }}>Secondary:</Text> {record.phone2}
+                  </div>
+                )}
+                {/* Fallback for old customers with single phone field */}
+                {!record.phone1 && !record.phone2 && record.phone && (
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: 2 }}>
                     <PhoneOutlined style={{ marginRight: 4 }} />
                     {record.phone}
-                  </Text>
+                  </div>
                 )}
                 {record.email && (
-                  <Text style={{ fontSize: '12px', color: '#666' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
                     <MailOutlined style={{ marginRight: 4 }} />
                     {record.email}
-                  </Text>
+                  </div>
                 )}
               </div>
               
@@ -532,9 +546,15 @@ const CustomerList = () => {
               <Col span={12}>
                 <Card size="small" title="Contact Information">
                   <Descriptions column={1} size="small">
-                    <Descriptions.Item label="Phone">
-                      {selectedCustomerForDetails.phone || 'Not provided'}
+                    {/* Display both phone numbers */}
+                    <Descriptions.Item label="Primary Phone">
+                      {selectedCustomerForDetails.phone1 || selectedCustomerForDetails.phone || 'Not provided'}
                     </Descriptions.Item>
+                    {selectedCustomerForDetails.phone2 && (
+                      <Descriptions.Item label="Secondary Phone">
+                        {selectedCustomerForDetails.phone2}
+                      </Descriptions.Item>
+                    )}
                     <Descriptions.Item label="Email">
                       {selectedCustomerForDetails.email || 'Not provided'}
                     </Descriptions.Item>
