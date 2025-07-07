@@ -1,0 +1,31 @@
+{
+  "name": "mitti-arts-sms-api",
+  "version": "1.0.0",
+  "description": "SMS API for Mitti Arts pottery business using Fast2SMS",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build step required'",
+    "start": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "sms",
+    "fast2sms", 
+    "pottery",
+    "mitti-arts",
+    "vercel",
+    "api"
+  ],
+  "author": "Mitti Arts",
+  "license": "MIT"
+}

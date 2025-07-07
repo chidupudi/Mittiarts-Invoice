@@ -1,0 +1,35 @@
+
+{
+  "version": 2,
+  "name": "mitti-arts-sms-api",
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ],
+  "functions": {
+    "api/sms/send-bill.js": {
+      "maxDuration": 30
+    },
+    "api/sms/send-advance.js": {
+      "maxDuration": 30
+    },
+    "api/sms/send-completion.js": {
+      "maxDuration": 30
+    },
+    "api/sms/webhook.js": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "FAST2SMS_API_KEY": "EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN",
+    "FRONTEND_URL": "https://invoice.mittiarts.com"
+  }
+}
