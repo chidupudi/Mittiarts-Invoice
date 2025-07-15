@@ -44,8 +44,24 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get the origin from headers or use fallback
-    const origin = req.headers.origin || req.headers.referer || 'https://your-app.vercel.app';
+    // Get the origin from headers - properly handle multiple sources
+    let origin = req.headers.origin || req.headers.referer;
+
+    // If no origin in headers, construct from host
+    if (!origin) {
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers.host || req.headers['x-forwarded-host'] || 'invoice.mittiarts.com';
+      origin = `${protocol}://${host}`;
+    }
+
+    // Remove trailing slash and ensure it's your domain
+    origin = origin.replace(/\/$/, '');
+
+    // Ensure we're using the correct domain
+    if (!origin.includes('mittiarts.com') && !origin.includes('localhost')) {
+      origin = 'https://invoice.mittiarts.com';
+    }
+
     const billLink = `${origin}/public/invoice/${billToken}`;
 
     // Create SMS message

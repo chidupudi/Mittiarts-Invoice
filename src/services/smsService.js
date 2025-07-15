@@ -1,11 +1,11 @@
-// src/services/smsService.js - Updated SMS Service using Vercel API endpoints
+// src/services/smsService.js - Updated SMS Service with correct URL
 import axios from 'axios';
 
 class SMSService {
   constructor() {
-    // Base URL for your Vercel deployment - update this to your actual domain
+    // Use your actual domain - removed double slash
     this.baseURL = process.env.NODE_ENV === 'production' 
-      ? 'https://invoice.mittiarts.com//api' 
+      ? 'https://invoice.mittiarts.com/api' 
       : 'http://localhost:3001/api';
     
     this.timeout = 30000; // 30 seconds timeout for API calls
