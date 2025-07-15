@@ -2,7 +2,6 @@
 // Updated from Fast2SMS to Twilio integration
 
 import axios from 'axios';
-
 class SMSService {
   constructor() {
     // Use your actual domain
@@ -10,17 +9,18 @@ class SMSService {
       ? 'https://invoice.mittiarts.com/api' 
       : 'http://localhost:3000/api';
     
-    this.timeout = 30000; // 30 seconds timeout for API calls
-    this.retryAttempts = 2; // Number of retry attempts
-    this.retryDelay = 2000; // Delay between retries in ms
-    this.provider = 'Twilio'; // Updated provider
+    this.timeout = 30000;
+    this.retryAttempts = 2;
+    this.retryDelay = 2000;
+    this.provider = 'Fast2SMS'; // Updated provider
     
-    // Twilio specific settings
-    this.twilioConfig = {
-      accountSid: 'AC6a1f33b6d6b01ebba791ae6356de8b1f',
-      phoneNumber: '+12178338469',
-      reliability: '99.95% uptime SLA',
-      globalReach: true
+    // Fast2SMS specific settings
+    this.fast2smsConfig = {
+      apiKey: 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN',
+      route: 'q', // Quick route (non-DLT)
+      costPerSMS: '₹0.25 - ₹0.50',
+      reliability: 'High delivery rate in India',
+      dltRequired: false
     };
   }
 

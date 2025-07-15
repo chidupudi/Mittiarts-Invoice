@@ -1,11 +1,10 @@
-// api/send-sms.js - Twilio Version for Mitti Arts
+// api/send-sms.js - Fast2SMS Non-DLT Version for Mitti Arts
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
 
-  // Handle preflight request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -19,16 +18,18 @@ export default async function handler(req, res) {
     });
   }
 
+  // Initialize variables at the top
+  let cleanNumber = '';
+  let formattedNumber = '';
+
   try {
     console.log('📱 Received SMS request:', {
       method: req.method,
       bodyKeys: Object.keys(req.body || {})
     });
 
-    // Your Twilio credentials
-    const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'AC6a1f33b6d6b01ebba791ae6356de8b1f';
-    const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '048dd504aaf6abdaac8e6ae26eb52855';
-    const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '+12178338469';
+    // Your Fast2SMS API key
+    const FAST2SMS_API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
 
     const { phoneNumber, customerName, orderNumber, billToken, totalAmount, customMessage } = req.body;
 
@@ -58,7 +59,8 @@ export default async function handler(req, res) {
     }
 
     // Clean and validate phone number for India
-    const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
+    cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
+    formattedNumber = `+91${cleanNumber}`;
     
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
@@ -67,9 +69,6 @@ export default async function handler(req, res) {
         smsType: 'bill'
       });
     }
-
-    // Format phone number for Twilio (add +91 for India)
-    const formattedNumber = `+91${cleanNumber}`;
 
     // Get the origin for bill link
     let origin = req.headers.origin || req.headers.referer;
@@ -103,11 +102,11 @@ We appreciate your business!
 - Mitti Arts Team`;
     }
 
-    console.log('📱 Sending SMS to:', formattedNumber);
+    console.log('📱 Sending SMS to:', cleanNumber);
     console.log('📝 Message length:', message.length);
 
-    // Validate message length (Twilio supports up to 1600 characters)
-    if (message.length > 1600) {
+    // Validate message length
+    if (message.length > 1000) {
       return res.status(400).json({
         success: false,
         error: 'Message too long. Please reduce message length.',
@@ -115,58 +114,52 @@ We appreciate your business!
       });
     }
 
-    // Create Basic Auth header for Twilio
-    const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
-
-    // Send SMS via Twilio API
-    const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+    // Send SMS via Fast2SMS Quick Route (Non-DLT)
+    const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${auth}`,
+        'authorization': FAST2SMS_API_KEY,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        From: TWILIO_PHONE_NUMBER,
-        To: formattedNumber,
-        Body: message
+        message: message,
+        route: 'q', // Quick route - no DLT needed
+        numbers: cleanNumber
       })
     });
 
-    const twilioData = await twilioResponse.json();
+    const fast2smsData = await fast2smsResponse.json();
 
-    console.log('📊 Twilio Response Status:', twilioResponse.status);
-    console.log('📊 Twilio Response Data:', twilioData);
+    console.log('📊 Fast2SMS Response Status:', fast2smsResponse.status);
+    console.log('📊 Fast2SMS Response Data:', fast2smsData);
 
     // Handle successful response
-    if (twilioResponse.status === 201 && twilioData.sid) {
+    if (fast2smsData.return === true) {
       return res.status(200).json({
         success: true,
-        messageId: twilioData.sid,
+        messageId: fast2smsData.request_id,
         message: message,
         smsType: 'bill',
         billToken: billToken || null,
         billLink: billLink,
-        provider: 'Twilio',
+        provider: 'Fast2SMS',
         sentAt: new Date().toISOString(),
         phoneNumber: formattedNumber,
-        status: twilioData.status,
-        direction: twilioData.direction,
-        price: twilioData.price,
-        priceUnit: twilioData.price_unit
+        route: 'quick'
       });
     } else {
-      // Twilio returned an error
-      const errorMsg = twilioData?.message || twilioData?.error_message || 'Unknown Twilio API error';
-      console.error('❌ Twilio Error:', errorMsg);
+      // Fast2SMS returned an error
+      const errorMsg = fast2smsData.message?.[0] || 'Unknown Fast2SMS API error';
+      console.error('❌ Fast2SMS Error:', errorMsg);
       
       return res.status(422).json({
         success: false,
-        error: `Twilio API Error: ${errorMsg}`,
+        error: `Fast2SMS API Error: ${errorMsg}`,
         smsType: 'bill',
-        provider: 'Twilio',
+        provider: 'Fast2SMS',
         attemptedAt: new Date().toISOString(),
         phoneNumber: formattedNumber,
-        twilioResponse: twilioData
+        fast2smsResponse: fast2smsData
       });
     }
 
@@ -180,7 +173,7 @@ We appreciate your business!
       errorMessage = 'SMS request failed. Please check your internet connection.';
       statusCode = 503;
     } else if (error.message?.includes('auth')) {
-      errorMessage = 'SMS API authentication failed. Please check credentials.';
+      errorMessage = 'SMS API authentication failed. Please check API key.';
       statusCode = 401;
     } else if (error.message) {
       errorMessage = error.message;
@@ -190,16 +183,10 @@ We appreciate your business!
       success: false,
       error: errorMessage,
       smsType: 'bill',
-      provider: 'Twilio',
+      provider: 'Fast2SMS',
       attemptedAt: new Date().toISOString(),
-      phoneNumber: formattedNumber,
-      errorCode: error.code || 'UNKNOWN',
-      ...(process.env.NODE_ENV === 'development' && { 
-        debug: {
-          originalError: error.message,
-          stack: error.stack
-        }
-      })
+      phoneNumber: formattedNumber || 'Invalid',
+      errorCode: error.code || 'UNKNOWN'
     });
   }
 }
