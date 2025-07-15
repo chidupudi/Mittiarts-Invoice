@@ -2,9 +2,9 @@
 // Enhanced API status check endpoint with Twilio diagnostics
 
 // Your Twilio credentials
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+const TWILIO_ACCOUNT_SID = 'AC6a1f33b6d6b01ebba791ae6356de8b1f';
+const TWILIO_AUTH_TOKEN = '048dd504aaf6abdaac8e6ae26eb52855';
+const TWILIO_PHONE_NUMBER = '+12178338469';
 const TWILIO_API_URL = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}`;
 
 export default async function handler(req, res) {
