@@ -7,6 +7,17 @@ import smsService from '../../services/smsService'; // Added for SMS integration
 import { updateStock } from '../products/productSlice';
 import { updateCustomerStats } from '../customer/customerSlice';
 
+// Helper function to safely handle SMS operations without affecting order creation
+const handleSMSDelivery = async (orderId, operation, context = '') => {
+  try {
+    await operation();
+  } catch (error) {
+    console.error(`SMS operation failed (${context}):`, error);
+    // SMS failures should not affect core business operations
+    // Log the error but continue processing
+  }
+};
+
 // Default branch info for fallback
 const DEFAULT_BRANCH_INFO = {
   id: 'default',
@@ -303,25 +314,34 @@ export const createOrder = createAsyncThunk(
         // Don't fail the order creation if invoice creation fails
       }
 
-      // 🆕 NEW: Send SMS after successful invoice creation
+      // 🆕 UPDATED: Send SMS after successful invoice creation with better error handling
+      let customerPhone = null; // Declare outside try block to avoid scope issues
+
       try {
         // Only send SMS if customer has a valid phone number
-        const customerPhone = customer?.phone1 || customer?.phone || customer?.phone2;
-        
+        customerPhone = customer?.phone || customer?.phone1 || customer?.phone2;
+
         if (customerPhone && smsService.isValidPhoneNumber(customerPhone)) {
           const customerName = customer?.name || 'Valued Customer';
-          
+
           // Generate bill token for secure sharing
           const billToken = smsService.generateBillToken();
-          
-          // Store bill token in order for future reference
+
+          // Store bill token in order FIRST (before attempting SMS)
           await firebaseService.update('orders', order.id, {
             billToken: billToken,
-            billTokenCreatedAt: new Date()
+            billTokenCreatedAt: new Date(),
+            smsDelivery: {
+              status: 'pending',
+              attemptedAt: new Date(),
+              phoneNumber: smsService.cleanPhoneNumber(customerPhone)
+            }
           });
-          
+
+          console.log('🔗 Bill token generated and stored:', billToken);
+
           let smsResult;
-          
+
           if (orderData.isAdvanceBilling) {
             // Send advance payment SMS
             smsResult = await smsService.sendAdvancePaymentSMS(
@@ -342,57 +362,71 @@ export const createOrder = createAsyncThunk(
               finalTotal
             );
           }
-          
-          if (smsResult.success) {
-            console.log('SMS sent successfully:', smsResult);
-            // Update order with SMS delivery info
+
+          // Update order based on SMS result
+          if (smsResult && smsResult.success) {
+            console.log('✅ SMS sent successfully:', smsResult.messageId);
             await firebaseService.update('orders', order.id, {
               smsDelivery: {
                 status: 'sent',
                 messageId: smsResult.messageId,
                 sentAt: new Date(),
-                phoneNumber: customerPhone,
-                message: smsResult.message
+                phoneNumber: smsService.cleanPhoneNumber(customerPhone),
+                message: smsResult.message || 'SMS sent successfully',
+                provider: smsResult.provider || 'Fast2SMS',
+                billToken: billToken,
+                billLink: smsResult.billLink
               }
             });
           } else {
-            console.warn('SMS sending failed:', smsResult.error);
-            // Update order with SMS failure info
+            console.warn('⚠️ SMS sending failed:', smsResult?.error || 'Unknown SMS error');
             await firebaseService.update('orders', order.id, {
               smsDelivery: {
                 status: 'failed',
-                error: smsResult.error,
-                attemptedAt: new Date(),
-                phoneNumber: customerPhone
+                error: smsResult?.error || 'SMS sending failed',
+                failedAt: new Date(),
+                phoneNumber: smsService.cleanPhoneNumber(customerPhone),
+                provider: 'Fast2SMS',
+                billToken: billToken,
+                retryable: smsResult?.retryable !== false
               }
             });
+
+            // Don't fail the order creation, just log the SMS failure
+            console.warn('⚠️ Order created successfully but SMS failed. Customer can still access invoice via other means.');
           }
         } else {
-          console.log('No valid phone number for SMS:', customerPhone);
+          console.log('📝 No valid phone number for SMS:', customerPhone);
           // Update order to indicate no SMS was sent
           await firebaseService.update('orders', order.id, {
             smsDelivery: {
               status: 'skipped',
-              reason: 'No valid phone number',
-              attemptedAt: new Date()
+              reason: customerPhone ? 'Invalid phone number format' : 'No phone number provided',
+              attemptedAt: new Date(),
+              phoneNumber: customerPhone || 'N/A'
             }
           });
         }
       } catch (smsError) {
-        console.error('SMS service error:', smsError);
-        // Don't fail the order creation if SMS fails
-        // Update order with SMS error info
+        console.error('💥 SMS service error (non-critical):', smsError);
+        // Don't fail the order creation if SMS fails - this is critical for business continuity
         try {
           await firebaseService.update('orders', order.id, {
             smsDelivery: {
               status: 'error',
-              error: smsError.message,
-              attemptedAt: new Date()
+              error: smsError.message || 'SMS service unavailable',
+              errorAt: new Date(),
+              phoneNumber: customerPhone || 'N/A', // Now customerPhone is in scope
+              stackTrace: process.env.NODE_ENV === 'development' ? smsError.stack : undefined
             }
           });
         } catch (updateError) {
           console.error('Failed to update SMS error status:', updateError);
+          // Even if we can't update the SMS status, continue with order creation
         }
+
+        // Continue with order creation - SMS failure should never block business operations
+        console.log('⚠️ Order created successfully but SMS service failed. Invoice is still accessible via direct links.');
       }
 
       // Update product stock for non-dynamic products
