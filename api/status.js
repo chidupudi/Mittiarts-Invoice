@@ -1,8 +1,11 @@
-// api/status.js - Enhanced API status check endpoint with diagnostics
-import axios from 'axios';
+// api/status.js - Complete Twilio SMS API status check for Mitti Arts
+// Enhanced API status check endpoint with Twilio diagnostics
 
-const FAST2SMS_API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
-const FAST2SMS_URL = 'https://www.fast2sms.com/dev/bulkV2';
+// Your Twilio credentials
+const TWILIO_ACCOUNT_SID = 'AC6a1f33b6d6b01ebba791ae6356de8b1f';
+const TWILIO_AUTH_TOKEN = '048dd504aaf6abdaac8e6ae26eb52855';
+const TWILIO_PHONE_NUMBER = '+12178338469';
+const TWILIO_API_URL = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}`;
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -27,87 +30,103 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    console.log('🔍 API Status check requested');
+    console.log('🔍 API Status check requested for Twilio');
 
     // Basic health check data
     const healthCheck = {
-      service: 'Mitti Arts SMS API',
+      service: 'Mitti Arts SMS API (Powered by Twilio)',
       status: 'operational',
       timestamp: new Date().toISOString(),
       uptime: process.uptime ? `${Math.floor(process.uptime())} seconds` : 'unknown',
-      version: '1.0.0',
-      environment: process.env.NODE_ENV || 'production'
+      version: '2.0.0',
+      environment: process.env.NODE_ENV || 'production',
+      provider: 'Twilio'
     };
 
     // Check API configuration
     const configuration = {
-      apiConfigured: !!FAST2SMS_API_KEY,
-      apiKeyLength: FAST2SMS_API_KEY ? FAST2SMS_API_KEY.length : 0,
-      apiKeyMasked: FAST2SMS_API_KEY ? `${FAST2SMS_API_KEY.substring(0, 8)}...${FAST2SMS_API_KEY.substring(FAST2SMS_API_KEY.length - 4)}` : 'Not configured',
-      smsProviderUrl: FAST2SMS_URL,
+      twilioConfigured: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN),
+      accountSID: TWILIO_ACCOUNT_SID ? `${TWILIO_ACCOUNT_SID.substring(0, 8)}...${TWILIO_ACCOUNT_SID.substring(TWILIO_ACCOUNT_SID.length - 4)}` : 'Not configured',
+      authTokenConfigured: !!TWILIO_AUTH_TOKEN,
+      phoneNumber: TWILIO_PHONE_NUMBER,
+      apiUrl: TWILIO_API_URL,
       endpoints: {
         'send-sms': {
           path: '/api/send-sms',
           method: 'POST',
-          description: 'Send regular bill SMS'
+          description: 'Send regular bill SMS via Twilio'
         },
         'send-advance-sms': {
           path: '/api/send-advance-sms', 
           method: 'POST',
-          description: 'Send advance payment SMS'
+          description: 'Send advance payment SMS via Twilio'
         },
         'send-completion-sms': {
           path: '/api/send-completion-sms',
           method: 'POST', 
-          description: 'Send payment completion SMS'
+          description: 'Send payment completion SMS via Twilio'
         },
         'status': {
           path: '/api/status',
           method: 'GET',
-          description: 'API health and status check'
+          description: 'API health and Twilio status check'
         }
       }
     };
 
-    // Test Fast2SMS connectivity (optional - only if query param is present)
-    let smsProviderStatus = {
+    // Test Twilio connectivity (optional - only if query param is present)
+    let twilioProviderStatus = {
       available: 'unknown',
       message: 'Connectivity test not performed',
       testPerformed: false
     };
 
-    if (req.query.testSMS === 'true') {
+    if (req.query.testTwilio === 'true') {
       try {
-        console.log('🧪 Testing Fast2SMS connectivity...');
+        console.log('🧪 Testing Twilio connectivity...');
         
-        const testResponse = await axios.get('https://www.fast2sms.com', {
-          timeout: 5000,
-          validateStatus: function (status) {
-            return status < 500;
+        // Create Basic Auth header for Twilio
+        const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+        
+        // Test Twilio by fetching account info
+        const testResponse = await fetch(`${TWILIO_API_URL}.json`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Accept': 'application/json'
           }
         });
 
-        if (testResponse.status === 200) {
-          smsProviderStatus = {
+        const testData = await testResponse.json();
+
+        if (testResponse.status === 200 && testData.sid) {
+          twilioProviderStatus = {
             available: true,
-            message: 'Fast2SMS is reachable',
+            message: 'Twilio API is reachable and authenticated',
             testPerformed: true,
-            responseTime: `${Date.now() - startTime}ms`
+            responseTime: `${Date.now() - startTime}ms`,
+            accountInfo: {
+              friendlyName: testData.friendly_name,
+              status: testData.status,
+              type: testData.type,
+              dateCreated: testData.date_created
+            }
           };
         } else {
-          smsProviderStatus = {
+          twilioProviderStatus = {
             available: false,
-            message: `Fast2SMS returned status: ${testResponse.status}`,
-            testPerformed: true
+            message: `Twilio returned status: ${testResponse.status}`,
+            testPerformed: true,
+            error: testData.message || testData.error_message || 'Unknown error'
           };
         }
       } catch (testError) {
-        console.warn('⚠️ SMS provider connectivity test failed:', testError.message);
-        smsProviderStatus = {
+        console.warn('⚠️ Twilio connectivity test failed:', testError.message);
+        twilioProviderStatus = {
           available: false,
-          message: `Fast2SMS connectivity test failed: ${testError.message}`,
+          message: `Twilio connectivity test failed: ${testError.message}`,
           testPerformed: true,
-          error: testError.code || 'UNKNOWN'
+          error: testError.code || testError.name || 'UNKNOWN'
         };
       }
     }
@@ -148,12 +167,12 @@ export default async function handler(req, res) {
     let overallStatus = 'healthy';
     let statusCode = 200;
 
-    if (!FAST2SMS_API_KEY) {
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
       overallStatus = 'degraded';
       statusCode = 200; // Still return 200 but indicate degraded service
     }
 
-    if (smsProviderStatus.available === false && smsProviderStatus.testPerformed) {
+    if (twilioProviderStatus.available === false && twilioProviderStatus.testPerformed) {
       overallStatus = 'degraded';
     }
 
@@ -162,21 +181,44 @@ export default async function handler(req, res) {
       status: overallStatus,
       ...healthCheck,
       configuration,
-      smsProvider: smsProviderStatus,
+      twilioProvider: twilioProviderStatus,
       system: systemInfo,
       request: requestInfo,
       performance,
       
       // Usage instructions
       usage: {
-        message: 'Mitti Arts SMS API is running',
+        message: 'Mitti Arts SMS API powered by Twilio is running',
         documentation: 'Send POST requests to the endpoint URLs with required parameters',
-        testSMS: 'Add ?testSMS=true to test SMS provider connectivity',
-        support: 'Contact: info@mittiarts.com'
+        testTwilio: 'Add ?testTwilio=true to test Twilio connectivity',
+        support: 'Contact: info@mittiarts.com',
+        twilioConsole: 'https://console.twilio.com',
+        pricing: 'SMS charges apply per message sent via Twilio'
+      },
+
+      // Twilio specific information
+      twilioInfo: {
+        apiEndpoint: TWILIO_API_URL,
+        phoneNumber: TWILIO_PHONE_NUMBER,
+        messagingService: 'Standard SMS via Twilio',
+        supportedCountries: ['India (+91)', 'US (+1)', 'Global reach'],
+        features: ['SMS', 'MMS', 'WhatsApp Business API', 'Voice', 'Video'],
+        reliability: '99.95% uptime SLA',
+        documentation: 'https://www.twilio.com/docs/sms',
+        pricing: 'https://www.twilio.com/sms/pricing'
+      },
+
+      // Pottery business specific info
+      mittiArtsInfo: {
+        businessType: 'Handcrafted Pottery & Terracotta Art',
+        smsTypes: ['Bill SMS', 'Advance Payment SMS', 'Completion SMS', 'Reminder SMS'],
+        targetMarket: 'Indian pottery customers',
+        phoneFormat: 'Indian mobile numbers (+91 format)',
+        invoiceSystem: 'Digital invoices with SMS notifications'
       }
     };
 
-    console.log(`✅ Status check completed in ${performance.responseTime}`);
+    console.log(`✅ Twilio status check completed in ${performance.responseTime}`);
 
     return res.status(statusCode).json(response);
 
@@ -188,6 +230,7 @@ export default async function handler(req, res) {
       status: 'error',
       error: 'Internal server error during status check',
       timestamp: new Date().toISOString(),
+      provider: 'Twilio',
       performance: {
         responseTime: `${Date.now() - startTime}ms`,
         failed: true

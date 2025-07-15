@@ -1,21 +1,4 @@
-// api/send-advance-sms.js - Updated with better error handling
-import axios from 'axios';
-
-const FAST2SMS_API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
-const FAST2SMS_URL = 'https://www.fast2sms.com/dev/bulkV2';
-
-// Helper function to clean phone number
-function cleanPhoneNumber(phoneNumber) {
-  if (!phoneNumber) return '';
-  return phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
-}
-
-// Helper function to validate phone number
-function isValidPhoneNumber(phoneNumber) {
-  const cleanNumber = cleanPhoneNumber(phoneNumber);
-  return /^[6-9]\d{9}$/.test(cleanNumber);
-}
-
+// api/send-advance-sms.js - Twilio Version for Mitti Arts Advance Payments
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -39,9 +22,13 @@ export default async function handler(req, res) {
   try {
     console.log('📱 Received advance SMS request:', {
       method: req.method,
-      headers: req.headers,
       bodyKeys: Object.keys(req.body || {})
     });
+
+    // Your Twilio credentials
+    const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || 'AC6a1f33b6d6b01ebba791ae6356de8b1f';
+    const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '048dd504aaf6abdaac8e6ae26eb52855';
+    const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '+12178338469';
 
     const { phoneNumber, customerName, orderNumber, advanceAmount, remainingAmount, billToken } = req.body;
 
@@ -87,15 +74,18 @@ export default async function handler(req, res) {
     }
 
     // Clean and validate phone number
-    const cleanNumber = cleanPhoneNumber(phoneNumber);
+    const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
     
-    if (!isValidPhoneNumber(phoneNumber)) {
+    if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid phone number format. Must be a valid 10-digit Indian mobile number.',
         smsType: 'advance'
       });
     }
+
+    // Format phone number for Twilio
+    const formattedNumber = `+91${cleanNumber}`;
 
     // Validate amounts
     const advance = Number(advanceAmount);
@@ -117,16 +107,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Validate API key
-    if (!FAST2SMS_API_KEY) {
-      console.error('❌ Fast2SMS API key not configured');
-      return res.status(500).json({
-        success: false,
-        error: 'SMS service not configured properly',
-        smsType: 'advance'
-      });
-    }
-
     // Get the origin for bill link
     let origin = req.headers.origin || req.headers.referer;
     if (!origin) {
@@ -141,7 +121,7 @@ export default async function handler(req, res) {
 
     const billLink = billToken ? `${origin}/public/invoice/${billToken}` : `${origin}`;
 
-    // Create advance payment SMS message
+    // Create advance payment SMS message for pottery business
     const message = `🏺 Dear ${customerName},
 
 Advance payment received for Mitti Arts!
@@ -155,7 +135,7 @@ View & Download Invoice: ${billLink}
 Thank you for choosing Mitti Arts!
 - Team Mitti Arts`;
 
-    console.log('📱 Sending advance SMS to:', cleanNumber);
+    console.log('📱 Sending advance SMS to:', formattedNumber);
     console.log('📝 Message length:', message.length);
 
     // Validate message length
@@ -167,59 +147,59 @@ Thank you for choosing Mitti Arts!
       });
     }
 
-    // Send SMS via Fast2SMS with better error handling
-    const smsResponse = await axios.post(FAST2SMS_URL, {
-      route: 'q',
-      message: message,
-      language: 'english',
-      flash: 0,
-      numbers: cleanNumber
-    }, {
+    // Create Basic Auth header for Twilio
+    const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
+
+    // Send SMS via Twilio API
+    const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+      method: 'POST',
       headers: {
-        'authorization': FAST2SMS_API_KEY,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache'
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      timeout: 15000,
-      validateStatus: function (status) {
-        return status < 500; // Don't throw on 4xx errors
-      }
+      body: new URLSearchParams({
+        From: TWILIO_PHONE_NUMBER,
+        To: formattedNumber,
+        Body: message
+      })
     });
 
-    console.log('📊 Fast2SMS Response Status:', smsResponse.status);
-    console.log('📊 Fast2SMS Response Data:', smsResponse.data);
+    const twilioData = await twilioResponse.json();
 
-    // Handle different response scenarios
-    if (smsResponse.status === 200 && smsResponse.data && smsResponse.data.return === true) {
-      // Success case
+    console.log('📊 Twilio Response Status:', twilioResponse.status);
+    console.log('📊 Twilio Response Data:', twilioData);
+
+    // Handle successful response
+    if (twilioResponse.status === 201 && twilioData.sid) {
       return res.status(200).json({
         success: true,
-        messageId: smsResponse.data.request_id || `msg_${Date.now()}`,
+        messageId: twilioData.sid,
         message: message,
         smsType: 'advance',
         billToken: billToken || null,
         billLink: billLink,
-        provider: 'Fast2SMS',
+        provider: 'Twilio',
         sentAt: new Date().toISOString(),
-        phoneNumber: cleanNumber,
-        cost: smsResponse.data.cost || 0,
-        smsCount: Math.ceil(message.length / 160),
+        phoneNumber: formattedNumber,
+        status: twilioData.status,
+        price: twilioData.price,
+        priceUnit: twilioData.price_unit,
         advanceAmount: advance,
         remainingAmount: remaining
       });
     } else {
-      // Fast2SMS returned an error
-      const errorMsg = smsResponse.data?.message || smsResponse.data?.error || 'Unknown SMS API error';
-      console.error('❌ Fast2SMS Error:', errorMsg);
+      // Twilio returned an error
+      const errorMsg = twilioData?.message || twilioData?.error_message || 'Unknown Twilio API error';
+      console.error('❌ Twilio Error:', errorMsg);
       
       return res.status(422).json({
         success: false,
-        error: `SMS API Error: ${errorMsg}`,
+        error: `Twilio API Error: ${errorMsg}`,
         smsType: 'advance',
-        provider: 'Fast2SMS',
+        provider: 'Twilio',
         attemptedAt: new Date().toISOString(),
-        phoneNumber: cleanNumber,
-        apiResponse: smsResponse.data
+        phoneNumber: formattedNumber,
+        twilioResponse: twilioData
       });
     }
 
@@ -229,21 +209,12 @@ Thank you for choosing Mitti Arts!
     let errorMessage = 'Failed to send advance SMS';
     let statusCode = 500;
     
-    if (error.code === 'ECONNABORTED') {
-      errorMessage = 'SMS request timed out. Please try again.';
-      statusCode = 408;
-    } else if (error.response?.status === 401) {
-      errorMessage = 'SMS API authentication failed. Invalid API key.';
+    if (error.message?.includes('fetch')) {
+      errorMessage = 'SMS request failed. Please check your internet connection.';
+      statusCode = 503;
+    } else if (error.message?.includes('auth')) {
+      errorMessage = 'SMS API authentication failed. Please check Twilio credentials.';
       statusCode = 401;
-    } else if (error.response?.status === 400) {
-      errorMessage = error.response.data?.message || 'Invalid SMS request data';
-      statusCode = 400;
-    } else if (error.response?.status === 429) {
-      errorMessage = 'Too many SMS requests. Please wait and try again.';
-      statusCode = 429;
-    } else if (error.response?.data?.message) {
-      errorMessage = error.response.data.message;
-      statusCode = error.response.status || 500;
     } else if (error.message) {
       errorMessage = error.message;
     }
@@ -252,10 +223,10 @@ Thank you for choosing Mitti Arts!
       success: false,
       error: errorMessage,
       smsType: 'advance',
-      provider: 'Fast2SMS',
+      provider: 'Twilio',
       attemptedAt: new Date().toISOString(),
-      phoneNumber: cleanPhoneNumber(req.body?.phoneNumber || ''),
-      errorCode: error.response?.status || 'UNKNOWN',
+      phoneNumber: formattedNumber,
+      errorCode: error.code || 'UNKNOWN',
       ...(process.env.NODE_ENV === 'development' && { 
         debug: {
           originalError: error.message,

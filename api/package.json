@@ -1,12 +1,61 @@
 {
-  "name": "mitti-arts-api",
-  "version": "1.0.0",
-  "description": "Serverless API for Mitti Arts SMS and notifications",
+  "name": "mitti-arts-api-twilio",
+  "version": "2.0.0",
+  "description": "Serverless API for Mitti Arts SMS notifications via Twilio - Handcrafted Pottery Business",
   "main": "index.js",
-  "dependencies": {
-    "axios": "^1.6.0"
-  },
+  "dependencies": {},
   "engines": {
-    "node": ">=14"
-  }
+    "node": ">=16"
+  },
+  "scripts": {
+    "test": "echo \"Mitti Arts Twilio SMS API - No tests specified\" && exit 0",
+    "dev": "vercel dev",
+    "deploy": "vercel"
+  },
+  "keywords": [
+    "twilio",
+    "sms",
+    "vercel",
+    "serverless",
+    "mitti-arts",
+    "pottery",
+    "invoice",
+    "notification",
+    "indian-business",
+    "handicrafts",
+    "terracotta",
+    "billing"
+  ],
+  "author": "Mitti Arts - Handcrafted Pottery",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/mitti-arts-pos"
+  },
+  "homepage": "https://invoice.mittiarts.com",
+  "bugs": {
+    "url": "https://github.com/your-username/mitti-arts-pos/issues",
+    "email": "info@mittiarts.com"
+  },
+  "vercel": {
+    "functions": {
+      "api/send-sms.js": {
+        "memory": 128,
+        "maxDuration": 10
+      },
+      "api/send-advance-sms.js": {
+        "memory": 128,
+        "maxDuration": 10
+      },
+      "api/send-completion-sms.js": {
+        "memory": 128,
+        "maxDuration": 10
+      },
+      "api/status.js": {
+        "memory": 128,
+        "maxDuration": 5
+      }
+    }
+  },
+  "private": false
 }

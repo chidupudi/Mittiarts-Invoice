@@ -1,4 +1,6 @@
-// src/services/smsService.js - Complete Updated SMS Service with robust error handling
+// src/services/smsService.js - Complete Twilio SMS Service for Mitti Arts
+// Updated from Fast2SMS to Twilio integration
+
 import axios from 'axios';
 
 class SMSService {
@@ -6,25 +8,34 @@ class SMSService {
     // Use your actual domain
     this.baseURL = process.env.NODE_ENV === 'production' 
       ? 'https://invoice.mittiarts.com/api' 
-      : 'http://localhost:3001/api';
+      : 'http://localhost:3000/api';
     
     this.timeout = 30000; // 30 seconds timeout for API calls
     this.retryAttempts = 2; // Number of retry attempts
     this.retryDelay = 2000; // Delay between retries in ms
+    this.provider = 'Twilio'; // Updated provider
+    
+    // Twilio specific settings
+    this.twilioConfig = {
+      accountSid: 'AC6a1f33b6d6b01ebba791ae6356de8b1f',
+      phoneNumber: '+12178338469',
+      reliability: '99.95% uptime SLA',
+      globalReach: true
+    };
   }
 
-  // Main SMS sending method with retry logic
+  // Main SMS sending method with retry logic for Twilio
   async sendSMSWithRetry(endpoint, payload, retries = this.retryAttempts) {
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       try {
-        console.log(`📱 SMS API attempt ${attempt}/${retries + 1} to ${endpoint}`);
+        console.log(`📱 SMS API attempt ${attempt}/${retries + 1} to ${endpoint} via ${this.provider}`);
         
         const response = await axios.post(`${this.baseURL}${endpoint}`, payload, {
           timeout: this.timeout,
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'MittiArts-POS/1.0'
+            'User-Agent': 'MittiArts-POS/2.0-Twilio'
           },
           validateStatus: function (status) {
             return status < 500; // Don't throw on 4xx errors
@@ -33,19 +44,22 @@ class SMSService {
 
         console.log(`📊 SMS API Response (${response.status}):`, response.data);
 
-        // Handle successful response
+        // Handle successful response from Twilio
         if (response.status === 200 && response.data && response.data.success) {
-          console.log('✅ SMS sent successfully');
+          console.log('✅ SMS sent successfully via Twilio');
           return {
             success: true,
-            messageId: response.data.messageId,
+            messageId: response.data.messageId, // Twilio SID
             message: response.data.message,
             billToken: response.data.billToken,
             billLink: response.data.billLink,
-            provider: response.data.provider || 'Fast2SMS',
+            provider: response.data.provider || 'Twilio',
             sentAt: response.data.sentAt || new Date().toISOString(),
             phoneNumber: response.data.phoneNumber,
-            cost: response.data.cost || 0
+            status: response.data.status, // Twilio message status
+            price: response.data.price, // Twilio pricing info
+            priceUnit: response.data.priceUnit || 'USD',
+            direction: response.data.direction
           };
         }
 
@@ -60,7 +74,8 @@ class SMSService {
               success: false,
               error: errorMsg,
               httpStatus: response.status,
-              retryable: false
+              retryable: false,
+              provider: 'Twilio'
             };
           }
           
@@ -87,10 +102,10 @@ class SMSService {
     }
   }
 
-  // Send regular bill SMS
+  // Send regular bill SMS via Twilio
   async sendBillSMS(phoneNumber, customerName, orderNumber, billToken, totalAmount) {
     try {
-      console.log('📱 Sending bill SMS...', {
+      console.log('📱 Sending bill SMS via Twilio...', {
         phone: this.formatPhoneForDisplay(phoneNumber),
         customer: customerName,
         order: orderNumber,
@@ -103,7 +118,8 @@ class SMSService {
         return {
           success: false,
           error: validation.error,
-          smsType: 'bill'
+          smsType: 'bill',
+          provider: 'Twilio'
         };
       }
 
@@ -126,15 +142,16 @@ class SMSService {
       return {
         success: false,
         error: error.message || 'Failed to send bill SMS',
-        smsType: 'bill'
+        smsType: 'bill',
+        provider: 'Twilio'
       };
     }
   }
 
-  // Send advance payment SMS
+  // Send advance payment SMS via Twilio
   async sendAdvancePaymentSMS(phoneNumber, customerName, orderNumber, advanceAmount, remainingAmount, billToken) {
     try {
-      console.log('📱 Sending advance payment SMS...', {
+      console.log('📱 Sending advance payment SMS via Twilio...', {
         phone: this.formatPhoneForDisplay(phoneNumber),
         customer: customerName,
         order: orderNumber,
@@ -148,7 +165,8 @@ class SMSService {
         return {
           success: false,
           error: validation.error,
-          smsType: 'advance'
+          smsType: 'advance',
+          provider: 'Twilio'
         };
       }
 
@@ -172,15 +190,16 @@ class SMSService {
       return {
         success: false,
         error: error.message || 'Failed to send advance SMS',
-        smsType: 'advance'
+        smsType: 'advance',
+        provider: 'Twilio'
       };
     }
   }
 
-  // Send payment completion SMS
+  // Send payment completion SMS via Twilio
   async sendPaymentCompletionSMS(phoneNumber, customerName, orderNumber, finalAmount, billToken) {
     try {
-      console.log('📱 Sending payment completion SMS...', {
+      console.log('📱 Sending payment completion SMS via Twilio...', {
         phone: this.formatPhoneForDisplay(phoneNumber),
         customer: customerName,
         order: orderNumber,
@@ -193,7 +212,8 @@ class SMSService {
         return {
           success: false,
           error: validation.error,
-          smsType: 'completion'
+          smsType: 'completion',
+          provider: 'Twilio'
         };
       }
 
@@ -216,7 +236,8 @@ class SMSService {
       return {
         success: false,
         error: error.message || 'Failed to send completion SMS',
-        smsType: 'completion'
+        smsType: 'completion',
+        provider: 'Twilio'
       };
     }
   }
@@ -224,7 +245,7 @@ class SMSService {
   // Send reminder SMS for pending advance payments
   async sendAdvanceReminderSMS(phoneNumber, customerName, orderNumber, remainingAmount, daysOverdue = 0) {
     try {
-      console.log('📱 Sending reminder SMS...');
+      console.log('📱 Sending reminder SMS via Twilio...');
       
       const overdueText = daysOverdue > 0 ? `(${daysOverdue} days overdue)` : '';
       
@@ -251,15 +272,16 @@ Contact us: 9441550927
       return {
         success: false,
         error: error.message || 'Failed to send reminder SMS',
-        smsType: 'reminder'
+        smsType: 'reminder',
+        provider: 'Twilio'
       };
     }
   }
 
-  // Send custom SMS
+  // Send custom SMS via Twilio
   async sendCustomSMS(phoneNumber, message) {
     try {
-      console.log('📱 Sending custom SMS...');
+      console.log('📱 Sending custom SMS via Twilio...');
       
       const payload = {
         phoneNumber: this.cleanPhoneNumber(phoneNumber),
@@ -280,12 +302,13 @@ Contact us: 9441550927
       return {
         success: false,
         error: error.message || 'Failed to send custom SMS',
-        smsType: 'custom'
+        smsType: 'custom',
+        provider: 'Twilio'
       };
     }
   }
 
-  // Validation methods
+  // Validation methods (same as before but with Twilio context)
   validateSMSInputs(phoneNumber, customerName, orderNumber) {
     if (!phoneNumber) {
       return { valid: false, error: 'Phone number is required' };
@@ -306,7 +329,7 @@ Contact us: 9441550927
     return { valid: true };
   }
 
-  // Phone number utilities
+  // Phone number utilities (same as before)
   cleanPhoneNumber(phoneNumber) {
     if (!phoneNumber) return '';
     return phoneNumber.replace(/^\+91/, '').replace(/\D/g, '');
@@ -332,7 +355,7 @@ Contact us: 9441550927
     return clean ? `${clean.slice(0, 5)}*****` : 'Invalid';
   }
 
-  // Token generation
+  // Token generation (same as before)
   generateBillToken() {
     const timestamp = Date.now().toString(36);
     const randomPart = Math.random().toString(36).substr(2, 15);
@@ -340,11 +363,11 @@ Contact us: 9441550927
     return `mitti_${timestamp}_${randomPart}_${extraRandom}`.toUpperCase();
   }
 
-  // Error handling utilities
+  // Error handling utilities (updated for Twilio)
   isNonRetryableError(error) {
     // Don't retry on validation errors, authentication errors, etc.
     const nonRetryableCodes = ['ENOTFOUND', 'ECONNREFUSED'];
-    const nonRetryableMessages = ['Invalid phone number', 'Authentication failed', 'API key'];
+    const nonRetryableMessages = ['Invalid phone number', 'Authentication failed', 'API key', 'forbidden', 'twilio'];
     
     return nonRetryableCodes.includes(error.code) ||
            nonRetryableMessages.some(msg => error.message.toLowerCase().includes(msg.toLowerCase()));
@@ -369,7 +392,8 @@ Contact us: 9441550927
       success: false,
       error: errorMessage,
       phoneNumber: this.cleanPhoneNumber(phoneNumber),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      provider: 'Twilio'
     };
   }
 
@@ -381,21 +405,23 @@ Contact us: 9441550927
   getMessageInfo(message) {
     const length = message.length;
     const smsCount = Math.ceil(length / 160);
-    const estimatedCost = smsCount * 0.50; // Estimated cost per SMS in INR
+    const estimatedCost = smsCount * 0.75; // Estimated cost per SMS in INR for Twilio
     
     return {
       length,
       smsCount,
       estimatedCost: estimatedCost.toFixed(2),
-      isLong: length > 160
+      isLong: length > 160,
+      provider: 'Twilio',
+      reliability: this.twilioConfig.reliability
     };
   }
 
-  // Batch SMS sending
+  // Batch SMS sending via Twilio
   async sendBatchSMS(phoneNumbers, message, delayBetweenSMS = 1000) {
     const results = [];
     
-    console.log(`📱 Starting batch SMS to ${phoneNumbers.length} numbers...`);
+    console.log(`📱 Starting batch SMS to ${phoneNumbers.length} numbers via Twilio...`);
     
     for (let i = 0; i < phoneNumbers.length; i++) {
       const phoneNumber = phoneNumbers[i];
@@ -417,7 +443,8 @@ Contact us: 9441550927
         results.push({
           phoneNumber: this.formatPhoneForDisplay(phoneNumber),
           success: false,
-          error: error.message
+          error: error.message,
+          provider: 'Twilio'
         });
       }
     }
@@ -431,14 +458,15 @@ Contact us: 9441550927
       total: phoneNumbers.length,
       successful,
       failed,
-      results
+      results,
+      provider: 'Twilio'
     };
   }
 
   // API status and testing
   async checkAPIStatus() {
     try {
-      console.log('🔍 Checking SMS API status...');
+      console.log('🔍 Checking Twilio SMS API status...');
       
       const response = await axios.get(`${this.baseURL}/status`, {
         timeout: 10000,
@@ -447,22 +475,25 @@ Contact us: 9441550927
         }
       });
       
-      console.log('✅ SMS API Status Response:', response.data);
+      console.log('✅ Twilio SMS API Status Response:', response.data);
       
       return {
         success: true,
         status: 'API is working',
+        provider: 'Twilio',
         baseURL: this.baseURL,
         timestamp: new Date().toISOString(),
+        twilioInfo: this.twilioConfig,
         ...response.data
       };
     } catch (error) {
-      console.error('❌ SMS API status check failed:', error);
+      console.error('❌ Twilio SMS API status check failed:', error);
       
       return {
         success: false,
         error: 'API not responding',
         details: error.message,
+        provider: 'Twilio',
         baseURL: this.baseURL,
         timestamp: new Date().toISOString()
       };
@@ -472,20 +503,22 @@ Contact us: 9441550927
   // Test SMS connection with a dummy message
   async testConnection(testPhoneNumber = '9999999999') {
     try {
-      console.log('🧪 Testing SMS connection...');
+      console.log('🧪 Testing Twilio SMS connection...');
       
-      const testResult = await this.sendCustomSMS(testPhoneNumber, 'Test message from Mitti Arts POS - Please ignore');
+      const testResult = await this.sendCustomSMS(testPhoneNumber, 'Test message from Mitti Arts POS via Twilio - Please ignore');
       
       return {
         success: testResult.success,
-        message: testResult.success ? 'SMS connection test successful' : 'SMS connection test failed',
-        details: testResult
+        message: testResult.success ? 'Twilio SMS connection test successful' : 'Twilio SMS connection test failed',
+        details: testResult,
+        provider: 'Twilio'
       };
     } catch (error) {
       return {
         success: false,
-        message: 'SMS connection test failed',
-        error: error.message
+        message: 'Twilio SMS connection test failed',
+        error: error.message,
+        provider: 'Twilio'
       };
     }
   }
@@ -502,7 +535,9 @@ Contact us: 9441550927
       timeout: this.timeout,
       retryAttempts: this.retryAttempts,
       retryDelay: this.retryDelay,
-      environment: process.env.NODE_ENV
+      provider: this.provider,
+      environment: process.env.NODE_ENV,
+      twilioConfig: this.twilioConfig
     };
   }
 
@@ -515,7 +550,21 @@ Contact us: 9441550927
     return {
       ...status,
       responseTime: `${responseTime}ms`,
-      healthy: status.success && responseTime < 5000
+      healthy: status.success && responseTime < 5000,
+      provider: 'Twilio'
+    };
+  }
+
+  // Get Twilio specific information
+  getTwilioInfo() {
+    return {
+      accountSid: this.twilioConfig.accountSid,
+      phoneNumber: this.twilioConfig.phoneNumber,
+      reliability: this.twilioConfig.reliability,
+      globalReach: this.twilioConfig.globalReach,
+      features: ['SMS', 'MMS', 'WhatsApp', 'Voice'],
+      documentation: 'https://www.twilio.com/docs/sms',
+      console: 'https://console.twilio.com'
     };
   }
 }
