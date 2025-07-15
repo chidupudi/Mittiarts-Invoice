@@ -15,10 +15,10 @@ class SMSService {
     this.retryDelay = 2000; // Delay between retries in ms
     this.provider = 'Twilio'; // Updated provider
     
-    // Twilio specific settings (Account SID from environment variable)
+    // Twilio specific settings
     this.twilioConfig = {
-      accountSid: process.env.REACT_APP_TWILIO_ACCOUNT_SID || '',
-      phoneNumber: process.env.REACT_APP_TWILIO_PHONE_NUMBER || '',
+      accountSid: 'AC6a1f33b6d6b01ebba791ae6356de8b1f',
+      phoneNumber: '+12178338469',
       reliability: '99.95% uptime SLA',
       globalReach: true
     };
