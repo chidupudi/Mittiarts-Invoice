@@ -38,7 +38,7 @@ const { useBreakpoint } = Grid;
 
 // Updated Main Store Information
 const MAIN_STORE_INFO = {
-  name: 'ART OF INDIAN POTTERY',
+  name: 'ART OF INDIAN POTTERY (Mitti arts)',
   address: 'Outlet: Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad.',
   phone: '9441550927 / 7382150250',
   gst: '36AMMPG0091P1ZN',

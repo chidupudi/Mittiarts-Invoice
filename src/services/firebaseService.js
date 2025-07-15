@@ -1,4 +1,4 @@
-// src/services/firebaseService.js - Updated timestamp handling
+// src/services/firebaseService.js - Updated with public access support
 
 import {
   collection,
@@ -113,18 +113,29 @@ class FirebaseService {
     }
   }
 
-  // Simplified getAll method that avoids complex indexes
+  // Enhanced getAll method that supports both authenticated and public access
   async getAll(collectionName, options = {}) {
     try {
       let q = collection(db, collectionName);
 
-      // Only use simple queries to avoid index requirements
-      if (auth.currentUser) {
-        // The security rules will ensure only authorized users can query the data.
-        // We no longer filter by userId here to allow all authorized users to see all data.
-        q = query(q, orderBy('createdAt', 'desc'));
-      } else {
-        // Just orderBy for public data (though your rules will block this)
+      // Handle WHERE conditions first
+      if (options.where && Array.isArray(options.where)) {
+        options.where.forEach(condition => {
+          // Convert date values to Timestamps if needed
+          let value = condition.value;
+          if (value instanceof Date) {
+            value = Timestamp.fromDate(value);
+          }
+          
+          q = query(q, where(condition.field, condition.operator, value));
+        });
+      }
+
+      // Add orderBy if specified
+      if (options.orderBy) {
+        q = query(q, orderBy(options.orderBy.field, options.orderBy.direction || 'desc'));
+      } else if (!options.where || options.where.length === 0) {
+        // Only add default ordering if no where conditions (to avoid index issues)
         q = query(q, orderBy('createdAt', 'desc'));
       }
 
@@ -140,20 +151,57 @@ class FirebaseService {
         docs.push({ id: doc.id, ...data });
       });
 
-      // Apply client-side filtering for complex conditions
+      // Apply additional client-side filtering if needed
       docs = this.applyClientSideFilters(docs, options);
 
       return docs;
     } catch (error) {
       console.error(`Error getting documents from ${collectionName}:`, error);
 
-      // If still getting index errors, fall back to getting all documents
+      // If getting index errors, fall back to simple query
       if (error.code === 'failed-precondition' || error.message.includes('index')) {
         console.warn('Index error detected, falling back to simple query...');
         return this.getAllWithoutFilters(collectionName, options);
       }
 
       throw new Error(`Error getting documents: ${error.message}`);
+    }
+  }
+
+  // 🆕 NEW: Public access method for orders by bill token (no auth required)
+  async getOrderByBillToken(billToken) {
+    try {
+      console.log('🔍 Searching for order with bill token:', billToken);
+      
+      // Query orders by billToken - this works without authentication
+      const ordersRef = collection(db, 'orders');
+      const q = query(
+        ordersRef, 
+        where('billToken', '==', billToken),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        throw new Error('Invoice not found or link has expired');
+      }
+
+      let orderData = null;
+      querySnapshot.forEach((doc) => {
+        const data = this.convertDocToPlainObject(doc.data());
+        orderData = { id: doc.id, ...data };
+      });
+
+      if (!orderData) {
+        throw new Error('Invoice not found');
+      }
+
+      console.log('✅ Order found for public access:', orderData.id);
+      return orderData;
+    } catch (error) {
+      console.error('❌ Error getting order by bill token:', error);
+      throw new Error(`Error accessing invoice: ${error.message}`);
     }
   }
 
@@ -169,7 +217,7 @@ class FirebaseService {
         docs.push({ id: doc.id, ...data });
       });
 
-      // Filter by user on client side
+      // Filter by user on client side (only for authenticated requests)
       if (auth.currentUser) {
         docs = docs.filter(doc => doc.userId === auth.currentUser.uid);
       }

@@ -1,0 +1,12 @@
+{
+  "name": "mitti-arts-api",
+  "version": "1.0.0",
+  "description": "Serverless API for Mitti Arts SMS and notifications",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

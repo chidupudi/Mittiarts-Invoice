@@ -1,8 +1,9 @@
-// src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management with Dynamic Branches
+// src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management with Dynamic Branches and SMS Integration
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import moment from 'moment'; // Imported for date calculations in analytics
 import firebaseService from '../../services/firebaseService';
 import invoiceService from '../../services/invoiceService';
+import smsService from '../../services/smsService'; // Added for SMS integration
 import { updateStock } from '../products/productSlice';
 import { updateCustomerStats } from '../customer/customerSlice';
 
@@ -132,7 +133,7 @@ export const fetchOrders = createAsyncThunk(
   }
 );
 
-// Create order with enhanced Mitti Arts business logic
+// Create order with enhanced Mitti Arts business logic and SMS integration
 export const createOrder = createAsyncThunk(
   'orders/create',
   async (orderData, { rejectWithValue, dispatch }) => {
@@ -280,17 +281,118 @@ export const createOrder = createAsyncThunk(
       const order = await firebaseService.create('orders', enhancedOrderData);
       console.log('Mitti Arts order created successfully:', order.id);
 
+      // Get customer data for SMS and invoice
+      let customer = null;
+      if (orderData.customerId) {
+        try {
+          customer = await firebaseService.getById('customers', orderData.customerId);
+        } catch (error) {
+          console.warn('Could not fetch customer for SMS/invoice:', error);
+        }
+      }
+
       // Create enhanced invoice with all business context
       try {
         await invoiceService.createInvoice({
           ...order,
-          customer: orderData.customerId ? 
-            await firebaseService.getById('customers', orderData.customerId) : null
+          customer: customer
         });
         console.log('Invoice created for order:', order.id);
       } catch (invoiceError) {
         console.error('Failed to create invoice:', invoiceError);
         // Don't fail the order creation if invoice creation fails
+      }
+
+      // 🆕 NEW: Send SMS after successful invoice creation
+      try {
+        // Only send SMS if customer has a valid phone number
+        const customerPhone = customer?.phone1 || customer?.phone || customer?.phone2;
+        
+        if (customerPhone && smsService.isValidPhoneNumber(customerPhone)) {
+          const customerName = customer?.name || 'Valued Customer';
+          
+          // Generate bill token for secure sharing
+          const billToken = smsService.generateBillToken();
+          
+          // Store bill token in order for future reference
+          await firebaseService.update('orders', order.id, {
+            billToken: billToken,
+            billTokenCreatedAt: new Date()
+          });
+          
+          let smsResult;
+          
+          if (orderData.isAdvanceBilling) {
+            // Send advance payment SMS
+            smsResult = await smsService.sendAdvancePaymentSMS(
+              customerPhone,
+              customerName,
+              orderNumber,
+              advanceAmount,
+              remainingAmount,
+              billToken
+            );
+          } else {
+            // Send regular bill SMS
+            smsResult = await smsService.sendBillSMS(
+              customerPhone,
+              customerName,
+              orderNumber,
+              billToken,
+              finalTotal
+            );
+          }
+          
+          if (smsResult.success) {
+            console.log('SMS sent successfully:', smsResult);
+            // Update order with SMS delivery info
+            await firebaseService.update('orders', order.id, {
+              smsDelivery: {
+                status: 'sent',
+                messageId: smsResult.messageId,
+                sentAt: new Date(),
+                phoneNumber: customerPhone,
+                message: smsResult.message
+              }
+            });
+          } else {
+            console.warn('SMS sending failed:', smsResult.error);
+            // Update order with SMS failure info
+            await firebaseService.update('orders', order.id, {
+              smsDelivery: {
+                status: 'failed',
+                error: smsResult.error,
+                attemptedAt: new Date(),
+                phoneNumber: customerPhone
+              }
+            });
+          }
+        } else {
+          console.log('No valid phone number for SMS:', customerPhone);
+          // Update order to indicate no SMS was sent
+          await firebaseService.update('orders', order.id, {
+            smsDelivery: {
+              status: 'skipped',
+              reason: 'No valid phone number',
+              attemptedAt: new Date()
+            }
+          });
+        }
+      } catch (smsError) {
+        console.error('SMS service error:', smsError);
+        // Don't fail the order creation if SMS fails
+        // Update order with SMS error info
+        try {
+          await firebaseService.update('orders', order.id, {
+            smsDelivery: {
+              status: 'error',
+              error: smsError.message,
+              attemptedAt: new Date()
+            }
+          });
+        } catch (updateError) {
+          console.error('Failed to update SMS error status:', updateError);
+        }
       }
 
       // Update product stock for non-dynamic products

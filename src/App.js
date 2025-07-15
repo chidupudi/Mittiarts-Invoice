@@ -1,4 +1,4 @@
-// src/App.js - Updated with Advance Payments routing
+// src/App.js - Complete Updated App with Public Invoice Route
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -12,7 +12,7 @@ import { store } from './app/store';
 import { auth } from './firebase/config';
 import { setUser, setLoading } from './features/auth/authSlice';
 
-// Components
+// Protected Components (require login)
 import Login from './components/auth/Login';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import Dashboard from './components/dashboard/Dashboard';
@@ -24,6 +24,9 @@ import Invoice from './components/billing/Invoice';
 import InvoiceList from './components/billing/InvoiceList';
 import StoreFront from './components/storefront/StoreFront';
 import AdvancePayments from './components/advance-payments/AdvancePayments';
+
+// Public Components (no login required)
+import PublicInvoice from './components/public/PublicInvoice';
 
 const antdTheme = {
   token: {
@@ -134,10 +137,11 @@ function AppContent() {
     <Router>
       <AuthListener />
       <Routes>
-        {/* Public routes */}
+        {/* PUBLIC ROUTES - No authentication required */}
         <Route path="/login" element={<Login />} />
+        <Route path="/public/invoice/:token" element={<PublicInvoice />} />
         
-        {/* Protected routes */}
+        {/* PROTECTED ROUTES - Authentication required */}
         <Route 
           path="/*" 
           element={
@@ -162,7 +166,7 @@ function AppContent() {
                   <Route path="/invoices" element={<InvoiceList />} />
                   <Route path="/invoices/:id" element={<Invoice />} />
                   
-                  {/* Advance Payments Management - NEW */}
+                  {/* Advance Payments Management */}
                   <Route path="/advance-payments" element={<AdvancePayments />} />
                   <Route path="/advance-payments/*" element={<AdvancePayments />} />
                   
@@ -170,13 +174,16 @@ function AppContent() {
                   <Route path="/storefront" element={<StoreFront />} />
                   <Route path="/storefront/*" element={<StoreFront />} />
                   
-                  {/* Catch all route */}
+                  {/* Catch all route for protected area */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </DashboardLayout>
             </ProtectedRoute>
           } 
         />
+        
+        {/* Catch all route for public area */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );
