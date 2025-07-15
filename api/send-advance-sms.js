@@ -121,13 +121,13 @@ export default async function handler(req, res) {
     const billLink = billToken ? `${origin}/public/invoice/${billToken}` : `${origin}`;
 
     // Create advance payment SMS message for pottery business
-    const message = `🏺 Dear ${customerName},
+    const message = ` Dear ${customerName},
 
 Advance payment received for Mitti Arts!
 
 Order: ${orderNumber}
-Advance Paid: ₹${advance.toFixed(2)}
-Balance Due: ₹${remaining.toFixed(2)}
+Advance Paid: RS${advance.toFixed(2)}
+Balance Due: RS${remaining.toFixed(2)}
 
 View & Download Invoice: ${billLink}
 

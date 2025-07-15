@@ -104,13 +104,13 @@ export default async function handler(req, res) {
     const billLink = billToken ? `${origin}/public/invoice/${billToken}` : `${origin}`;
 
     // Create payment completion SMS message
-    const message = `🏺 Dear ${customerName},
+    const message = ` Dear ${customerName},
 
 🎉 Payment completed for Mitti Arts order!
 
 Order: ${orderNumber}
-Final Payment: ₹${finalPayment.toFixed(2)}
-Status: PAID IN FULL ✅
+Final Payment: Rs${finalPayment.toFixed(2)}
+Status: PAID IN FULL 
 
 Download Final Invoice: ${billLink}
 

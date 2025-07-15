@@ -85,22 +85,13 @@ export default async function handler(req, res) {
     const billLink = billToken && billToken !== 'none' ? `${origin}/public/invoice/${billToken}` : `${origin}`;
 
     // Create SMS message
-    let message;
-    if (customMessage) {
-      message = customMessage;
-    } else {
-      message = `🏺 Dear ${customerName},
-
-Thank you for choosing Mitti Arts!
-
-Order: ${orderNumber}
-Amount: ₹${(totalAmount || 0).toFixed(2)}
-
-View & Download Invoice: ${billLink}
-
-We appreciate your business!
-- Mitti Arts Team`;
-    }
+   // Create SMS message (removed emojis for Fast2SMS compatibility)
+let message;
+if (customMessage) {
+  message = customMessage;
+} else {
+  message = `Dear ${customerName}, Thank you for choosing Mitti Arts! Order: ${orderNumber} Amount: Rs.${(totalAmount || 0).toFixed(2)} View Invoice: ${billLink} - Mitti Arts Team`;
+}
 
     console.log('📱 Sending SMS to:', cleanNumber);
     console.log('📝 Message length:', message.length);
@@ -114,6 +105,7 @@ We appreciate your business!
       });
     }
 // Send SMS via Fast2SMS Quick Route (Non-DLT)
+// Send SMS via Fast2SMS API
 const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
   method: 'POST',
   headers: {
@@ -123,10 +115,10 @@ const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
   },
   body: new URLSearchParams({
     message: message,
-    route: 'q',
+    route: 'p', // Promotional route instead of 'q'
     numbers: cleanNumber,
     language: 'english'
-  }).toString()
+  })
 });
     const fast2smsData = await fast2smsResponse.json();
 
