@@ -31,16 +31,15 @@ class SMSService {
         console.log(`📱 SMS API attempt ${attempt}/${retries + 1} to ${endpoint} via ${this.provider}`);
         
         const response = await axios.post(`${this.baseURL}${endpoint}`, payload, {
-          timeout: this.timeout,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'User-Agent': 'MittiArts-POS/2.0-Twilio'
-          },
-          validateStatus: function (status) {
-            return status < 500; // Don't throw on 4xx errors
-          }
-        });
+  timeout: this.timeout,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  validateStatus: function (status) {
+    return status < 500; // Don't throw on 4xx errors
+  }
+});
 
         console.log(`📊 SMS API Response (${response.status}):`, response.data);
 

@@ -113,21 +113,21 @@ We appreciate your business!
         smsType: 'bill'
       });
     }
-
-    // Send SMS via Fast2SMS Quick Route (Non-DLT)
-    const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-      method: 'POST',
-      headers: {
-        'authorization': FAST2SMS_API_KEY,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        message: message,
-        route: 'q', // Quick route - no DLT needed
-        numbers: cleanNumber
-      })
-    });
-
+// Send SMS via Fast2SMS Quick Route (Non-DLT)
+const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+  method: 'POST',
+  headers: {
+    'authorization': FAST2SMS_API_KEY,
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'cache-control': 'no-cache'
+  },
+  body: new URLSearchParams({
+    message: message,
+    route: 'q',
+    numbers: cleanNumber,
+    language: 'english'
+  }).toString()
+});
     const fast2smsData = await fast2smsResponse.json();
 
     console.log('📊 Fast2SMS Response Status:', fast2smsResponse.status);
