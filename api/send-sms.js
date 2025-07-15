@@ -84,13 +84,12 @@ export default async function handler(req, res) {
 
     const billLink = billToken && billToken !== 'none' ? `${origin}/public/invoice/${billToken}` : `${origin}`;
 
-    // Create SMS message
-   // Create SMS message (removed emojis for Fast2SMS compatibility)
+// Create SMS message (simple format for Fast2SMS)
 let message;
 if (customMessage) {
   message = customMessage;
 } else {
-  message = `Dear ${customerName}, Thank you for choosing Mitti Arts! Order: ${orderNumber} Amount: Rs.${(totalAmount || 0).toFixed(2)} View Invoice: ${billLink} - Mitti Arts Team`;
+  message = `Dear ${customerName}, Thank you for Mitti Arts order ${orderNumber}. Amount Rs.${(totalAmount || 0).toFixed(2)}. View: ${billLink}`;
 }
 
     console.log('📱 Sending SMS to:', cleanNumber);
@@ -106,19 +105,22 @@ if (customMessage) {
     }
 // Send SMS via Fast2SMS Quick Route (Non-DLT)
 // Send SMS via Fast2SMS API
-const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-  method: 'POST',
+
+
+// Send SMS via Fast2SMS API (GET method for non-DLT)
+const smsParams = new URLSearchParams({
+  authorization: FAST2SMS_API_KEY,
+  message: message,
+  route: 'q',
+  numbers: cleanNumber,
+  flash: '0'
+});
+
+const fast2smsResponse = await fetch(`https://www.fast2sms.com/dev/bulkV2?${smsParams.toString()}`, {
+  method: 'GET',
   headers: {
-    'authorization': FAST2SMS_API_KEY,
-    'Content-Type': 'application/x-www-form-urlencoded',
     'cache-control': 'no-cache'
-  },
-  body: new URLSearchParams({
-    message: message,
-    route: 'p', // Promotional route instead of 'q'
-    numbers: cleanNumber,
-    language: 'english'
-  })
+  }
 });
     const fast2smsData = await fast2smsResponse.json();
 

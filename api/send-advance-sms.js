@@ -145,20 +145,22 @@ Thank you for choosing Mitti Arts!
         smsType: 'advance'
       });
     }
+// Send SMS via Fast2SMS API (GET method for non-DLT)
+const smsParams = new URLSearchParams({
+  authorization: FAST2SMS_API_KEY,
+  message: message,
+  route: 'q',
+  numbers: cleanNumber,
+  flash: '0'
+});
 
-    // Send SMS via Fast2SMS Quick Route (Non-DLT)
-    const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-      method: 'POST',
-      headers: {
-        'authorization': FAST2SMS_API_KEY,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        message: message,
-        route: 'q', // Quick route - no DLT needed
-        numbers: cleanNumber
-      })
-    });
+const fast2smsResponse = await fetch(`https://www.fast2sms.com/dev/bulkV2?${smsParams.toString()}`, {
+  method: 'GET',
+  headers: {
+    'cache-control': 'no-cache'
+  }
+});
+
 
     const fast2smsData = await fast2smsResponse.json();
 
