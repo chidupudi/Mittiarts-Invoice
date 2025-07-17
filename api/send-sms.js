@@ -1,4 +1,4 @@
-// api/send-sms.js - Simplified Fast2SMS for Mitti Arts
+// api/send-sms.js - Fixed Fast2SMS for Mitti Arts
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -42,8 +42,8 @@ export default async function handler(req, res) {
     // Create simple message
     const message = `Dear ${customerName}, Thank you for Mitti Arts order ${orderNumber}. Amount Rs.${(totalAmount || 0).toFixed(2)}. Thank you!`;
 
-    // Fast2SMS API call (GET method)
-    const apiKey = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15';
+    // Fast2SMS API call (GET method) - FIXED: Complete API key
+    const apiKey = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
     
     const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&message=${encodeURIComponent(message)}&route=q&numbers=${cleanNumber}&flash=0`;
     
@@ -67,10 +67,14 @@ export default async function handler(req, res) {
         provider: 'Fast2SMS'
       });
     } else {
+      // FIXED: Proper error message handling
+      const errorMsg = data.message?.[0] || data.message || 'SMS failed';
+      
       return res.status(422).json({
         success: false,
-        error: data.message?.[0] || 'SMS failed',
-        provider: 'Fast2SMS'
+        error: errorMsg,
+        provider: 'Fast2SMS',
+        fast2smsResponse: data
       });
     }
 
