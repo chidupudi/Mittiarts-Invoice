@@ -1,4 +1,4 @@
-// src/components/public/PublicInvoice.js - Complete Public Invoice View
+// src/components/public/PublicInvoice.js - Complete Updated Component
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -14,7 +14,8 @@ import {
   Descriptions,
   Table,
   Divider,
-  message
+  message,
+  Result
 } from 'antd';
 import { 
   DownloadOutlined, 
@@ -24,7 +25,9 @@ import {
   MailOutlined,
   HomeOutlined,
   ClockCircleOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  SafetyCertificateOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -33,7 +36,7 @@ import firebaseService from '../../services/firebaseService';
 
 const { Title, Text } = Typography;
 
-// Main store information for public view
+// Store information
 const MAIN_STORE_INFO = {
   name: 'ART OF INDIAN POTTERY (Mitti arts)',
   address: 'Outlet: Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad.',
@@ -49,9 +52,15 @@ const PublicInvoice = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
+  const [accessInfo, setAccessInfo] = useState(null);
 
   useEffect(() => {
-    fetchInvoiceByToken();
+    if (token) {
+      fetchInvoiceByToken();
+    } else {
+      setError('Invalid invoice link - no token provided');
+      setLoading(false);
+    }
   }, [token]);
 
   const fetchInvoiceByToken = async () => {
@@ -59,31 +68,49 @@ const PublicInvoice = () => {
       setLoading(true);
       setError(null);
 
-      console.log('🔍 Fetching invoice with token:', token);
+      console.log('🔍 Accessing public invoice with token:', token?.slice(0, 10) + '...');
 
-      // Use the new public access method
-      const orderData = await firebaseService.getOrderByBillToken(token);
+      // Get client IP (basic implementation)
+      const clientIp = getClientIP();
 
-      // Get customer data if available
-      if (orderData.customerId) {
-        try {
-          const customer = await firebaseService.getById('customers', orderData.customerId);
-          orderData.customer = customer;
-          console.log('✅ Customer data loaded');
-        } catch (customerError) {
-          console.warn('⚠️ Could not fetch customer data:', customerError);
-          // Continue without customer data
-        }
-      }
+      // Use your updated firebaseService method
+      const orderData = await firebaseService.getOrderByBillToken(token, clientIp);
 
       setOrder(orderData);
-      console.log('✅ Invoice loaded successfully');
+      
+      // Set access info for display
+      setAccessInfo({
+        accessTime: new Date().toLocaleString(),
+        tokenStatus: 'Valid',
+        secured: true
+      });
+
+      console.log('✅ Public invoice loaded successfully:', orderData.orderNumber);
     } catch (err) {
-      console.error('❌ Error fetching invoice:', err);
+      console.error('❌ Error accessing public invoice:', err);
       setError(err.message);
+      
+      // Set error info
+      setAccessInfo({
+        accessTime: new Date().toLocaleString(),
+        tokenStatus: getErrorType(err.message),
+        secured: true
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  const getClientIP = () => {
+    // Simple implementation - in production you might want more sophisticated IP detection
+    return 'unknown';
+  };
+
+  const getErrorType = (errorMessage) => {
+    if (errorMessage.includes('expired')) return 'Expired';
+    if (errorMessage.includes('Too many requests')) return 'Rate Limited';
+    if (errorMessage.includes('Invalid invoice link format')) return 'Invalid Format';
+    return 'Not Found';
   };
 
   const handleDownloadPDF = async () => {
@@ -96,10 +123,8 @@ const PublicInvoice = () => {
         throw new Error('Invoice content not found');
       }
 
-      // Show loading message
-      message.loading('Generating PDF...', 2);
+      message.loading('Generating your Mitti Arts invoice PDF...', 2);
 
-      // Create canvas from the invoice content
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
@@ -111,7 +136,6 @@ const PublicInvoice = () => {
 
       const imgData = canvas.toDataURL('image/png');
       
-      // Create PDF
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -128,16 +152,15 @@ const PublicInvoice = () => {
 
       pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
       
-      // Download the PDF
       const fileName = `Mitti-Arts-Invoice-${order.orderNumber}-${moment().format('YYYY-MM-DD')}.pdf`;
       pdf.save(fileName);
       
       message.destroy();
-      message.success('Invoice downloaded successfully!');
+      message.success('Invoice downloaded successfully! 🎉');
     } catch (error) {
       console.error('Error generating PDF:', error);
       message.destroy();
-      message.error('Failed to download invoice. Please try again.');
+      message.error('Failed to download invoice. Please try again or contact us.');
     } finally {
       setDownloading(false);
     }
@@ -147,6 +170,10 @@ const PublicInvoice = () => {
     window.print();
   };
 
+  const handleContactUs = () => {
+    window.location.href = `tel:${MAIN_STORE_INFO.phone.split(' / ')[0]}`;
+  };
+
   const itemColumns = [
     {
       title: '#',
@@ -154,10 +181,15 @@ const PublicInvoice = () => {
       render: (_, __, index) => index + 1,
     },
     {
-      title: 'Product',
+      title: 'Pottery Product',
       dataIndex: ['product', 'name'],
       key: 'product',
-      render: (name) => <Text strong>{name}</Text>,
+      render: (name) => (
+        <Space>
+          <span style={{ fontSize: '16px' }}>🏺</span>
+          <Text strong>{name}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Quantity',
@@ -165,6 +197,7 @@ const PublicInvoice = () => {
       key: 'quantity',
       width: 80,
       align: 'center',
+      render: (qty) => <Tag color="#8b4513">{qty}</Tag>
     },
     {
       title: 'Unit Price',
@@ -179,10 +212,15 @@ const PublicInvoice = () => {
       key: 'total',
       width: 100,
       align: 'right',
-      render: (_, record) => `₹${(record.price * record.quantity).toFixed(2)}`,
+      render: (_, record) => (
+        <Text strong style={{ color: '#8b4513' }}>
+          ₹{(record.price * record.quantity).toFixed(2)}
+        </Text>
+      ),
     },
   ];
 
+  // Loading state
   if (loading) {
     return (
       <div style={{
@@ -196,16 +234,22 @@ const PublicInvoice = () => {
           <div style={{ fontSize: '48px', marginBottom: 16 }}>🏺</div>
           <Spin size="large" />
           <Title level={4} style={{ marginTop: 16, color: '#8b4513' }}>
-            Loading your Mitti Arts invoice...
+            Loading Your Mitti Arts Invoice
           </Title>
           <Text type="secondary">
-            Please wait while we fetch your pottery invoice details
+            Fetching your handcrafted pottery invoice details...
           </Text>
+          <div style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: '12px', color: '#666' }}>
+              🔒 Secure access • Token: {token?.slice(0, 10)}...
+            </Text>
+          </div>
         </Card>
       </div>
     );
   }
 
+  // Error state
   if (error) {
     return (
       <div style={{
@@ -216,30 +260,93 @@ const PublicInvoice = () => {
         background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
         padding: '20px'
       }}>
-        <Card style={{ maxWidth: 500, textAlign: 'center', borderRadius: '12px' }}>
-          <div style={{ fontSize: '48px', marginBottom: 16 }}>🏺</div>
-          <Title level={3} style={{ color: '#8b4513' }}>Mitti Arts</Title>
-          <Alert
-            message="Invoice Not Found"
-            description={error}
-            type="error"
-            showIcon
-            style={{ marginBottom: 16 }}
+        <Card style={{ maxWidth: 600, textAlign: 'center', borderRadius: '12px' }}>
+          <Result
+            icon={<div style={{ fontSize: '72px' }}>🏺</div>}
+            title={<Title level={3} style={{ color: '#8b4513' }}>Mitti Arts</Title>}
+            status="error"
+            subTitle={
+              <div>
+                <Alert
+                  message={
+                    error.includes('expired') ? 'Invoice Link Expired' :
+                    error.includes('Too many requests') ? 'Too Many Requests' :
+                    error.includes('Invalid invoice link format') ? 'Invalid Link Format' :
+                    'Invoice Not Found'
+                  }
+                  description={error}
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 16, textAlign: 'left' }}
+                />
+                
+                {accessInfo && (
+                  <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }}>
+                    <Row gutter={16}>
+                      <Col span={8}>
+                        <Text type="secondary">Access Time:</Text>
+                        <div style={{ fontSize: '12px' }}>{accessInfo.accessTime}</div>
+                      </Col>
+                      <Col span={8}>
+                        <Text type="secondary">Token Status:</Text>
+                        <div>
+                          <Tag color={
+                            accessInfo.tokenStatus === 'Valid' ? 'green' :
+                            accessInfo.tokenStatus === 'Expired' ? 'orange' : 'red'
+                          }>
+                            {accessInfo.tokenStatus}
+                          </Tag>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <Text type="secondary">Security:</Text>
+                        <div>
+                          <SafetyCertificateOutlined style={{ color: '#52c41a' }} /> Protected
+                        </div>
+                      </Col>
+                    </Row>
+                  </Card>
+                )}
+
+                <div style={{ marginTop: 16, fontSize: '14px', color: '#666', textAlign: 'left' }}>
+                  <Title level={5}>What you can do:</Title>
+                  <ul style={{ paddingLeft: '20px' }}>
+                    <li>Contact us for a new invoice link</li>
+                    <li>Check if you copied the complete link from SMS</li>
+                    <li>Try again after a few minutes if rate limited</li>
+                  </ul>
+                </div>
+              </div>
+            }
+            extra={[
+              <Button 
+                key="contact"
+                type="primary" 
+                size="large"
+                style={{ 
+                  background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
+                  border: 'none',
+                  marginRight: 8
+                }}
+                onClick={handleContactUs}
+                icon={<PhoneOutlined />}
+              >
+                Call Us
+              </Button>,
+              <Button 
+                key="retry"
+                size="large"
+                onClick={() => window.location.reload()}
+              >
+                Try Again
+              </Button>
+            ]}
           />
-          <Text type="secondary">
-            If you believe this is an error, please contact us at {MAIN_STORE_INFO.phone}
-          </Text>
-          <div style={{ marginTop: 16 }}>
-            <Button 
-              type="primary" 
-              style={{ 
-                background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
-                border: 'none'
-              }}
-              onClick={() => window.location.href = 'tel:' + MAIN_STORE_INFO.phone.split(' / ')[0]}
-            >
-              Call Us Now
-            </Button>
+          
+          <div style={{ marginTop: 24, fontSize: '12px', color: '#666' }}>
+            <Text type="secondary">
+              For assistance, call us at {MAIN_STORE_INFO.phone} or email {MAIN_STORE_INFO.email}
+            </Text>
           </div>
         </Card>
       </div>
@@ -257,11 +364,7 @@ const PublicInvoice = () => {
       padding: '20px'
     }}>
       {/* Header with download button */}
-      <div style={{
-        maxWidth: '800px',
-        margin: '0 auto',
-        marginBottom: '20px'
-      }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', marginBottom: '20px' }}>
         <Card style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(139, 69, 19, 0.15)' }}>
           <Row justify="space-between" align="middle">
             <Col>
@@ -284,6 +387,14 @@ const PublicInvoice = () => {
                     Your Mitti Arts Invoice
                   </Title>
                   <Text type="secondary">Thank you for choosing handcrafted pottery!</Text>
+                  <div style={{ marginTop: 4 }}>
+                    <Tag color="green" size="small">
+                      <SafetyCertificateOutlined /> Secure Access
+                    </Tag>
+                    <Tag color="#8b4513" size="small">
+                      Order: {order.orderNumber}
+                    </Tag>
+                  </div>
                 </div>
               </Space>
             </Col>
@@ -292,10 +403,7 @@ const PublicInvoice = () => {
                 <Button
                   icon={<PrinterOutlined />}
                   onClick={handlePrint}
-                  style={{
-                    borderColor: '#8b4513',
-                    color: '#8b4513'
-                  }}
+                  style={{ borderColor: '#8b4513', color: '#8b4513' }}
                 >
                   Print
                 </Button>
@@ -320,16 +428,10 @@ const PublicInvoice = () => {
       </div>
 
       {/* Invoice Content */}
-      <div style={{
-        maxWidth: '800px',
-        margin: '0 auto'
-      }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         <Card 
           id="invoice-content"
-          style={{
-            borderRadius: '12px',
-            boxShadow: '0 8px 24px rgba(139, 69, 19, 0.1)'
-          }}
+          style={{ borderRadius: '12px', boxShadow: '0 8px 24px rgba(139, 69, 19, 0.1)' }}
         >
           {/* Header */}
           <div style={{
@@ -414,12 +516,6 @@ const PublicInvoice = () => {
                       {order.customer.phone}
                     </div>
                   )}
-                  {order.customer?.email && (
-                    <div style={{ marginBottom: 6 }}>
-                      <MailOutlined style={{ marginRight: 6, color: '#8b4513' }} />
-                      {order.customer.email}
-                    </div>
-                  )}
                   <div style={{ marginTop: 8 }}>
                     <Tag color={order.businessType === 'wholesale' ? 'orange' : 'blue'}>
                       {order.businessType === 'wholesale' ? 'Wholesale Customer' : 'Retail Customer'}
@@ -437,14 +533,9 @@ const PublicInvoice = () => {
           </Row>
 
           {/* Order Details */}
-          <Descriptions
-            bordered
-            column={3}
-            size="small"
-            style={{ marginBottom: 24 }}
-          >
+          <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
             <Descriptions.Item label="Invoice Date">
-              {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD MMMM YYYY')}
+              {moment(order.createdAt).format('DD MMMM YYYY')}
             </Descriptions.Item>
             <Descriptions.Item label="Payment Method">
               <Tag color="green">{order.paymentMethod || 'Cash'}</Tag>
@@ -462,11 +553,7 @@ const PublicInvoice = () => {
           {/* Advance Payment Info */}
           {order.isAdvanceBilling && (
             <Alert
-              message={
-                order.remainingAmount > 0 
-                  ? "Advance Payment Received" 
-                  : "Payment Completed"
-              }
+              message={order.remainingAmount > 0 ? "Advance Payment Received" : "Payment Completed"}
               description={
                 order.remainingAmount > 0 
                   ? `This is an advance payment invoice. Advance paid: ₹${order.advanceAmount?.toFixed(2)}. Remaining balance: ₹${order.remainingAmount?.toFixed(2)}`
@@ -479,7 +566,7 @@ const PublicInvoice = () => {
           )}
 
           {/* Items Table */}
-          <Card title="Order Items" size="small" style={{ marginBottom: 24 }}>
+          <Card title="Pottery Items Ordered" size="small" style={{ marginBottom: 24 }}>
             <Table
               columns={itemColumns}
               dataSource={order.items || []}
@@ -565,12 +652,8 @@ const PublicInvoice = () => {
         </Card>
       </div>
 
-      {/* Footer Message */}
-      <div style={{
-        maxWidth: '800px',
-        margin: '20px auto 0',
-        textAlign: 'center'
-      }}>
+      {/* Thank you message */}
+      <div style={{ maxWidth: '800px', margin: '20px auto 0', textAlign: 'center' }}>
         <Card style={{ borderRadius: '12px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
           <Space direction="vertical" size="small">
             <Title level={5} style={{ margin: 0, color: '#52c41a' }}>

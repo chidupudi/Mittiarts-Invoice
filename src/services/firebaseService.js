@@ -1,5 +1,4 @@
-// src/services/firebaseService.js - Updated with public access support
-
+// src/services/firebaseService.js - Enhanced with better security
 import {
   collection,
   doc,
@@ -18,96 +17,170 @@ import {
 import { auth, db } from '../firebase/config';
 
 class FirebaseService {
-  // Helper to convert Firestore document to plain object
-// Replace your existing convertDocToPlainObject method with this:
+  constructor() {
+    // Rate limiting for public access
+    this.publicAccessAttempts = new Map();
+    this.maxAttemptsPerMinute = 10;
+  }
 
-convertDocToPlainObject(docData) {
-  const plainObject = { ...docData };
-  
-  // Convert ALL Timestamp fields to ISO strings (including nested ones)
-  Object.keys(plainObject).forEach(key => {
-    const value = plainObject[key];
+  // Rate limiting for public access
+  checkRateLimit(ip = 'unknown') {
+    const now = Date.now();
+    const attempts = this.publicAccessAttempts.get(ip) || [];
     
-    if (value instanceof Timestamp) {
-      plainObject[key] = value.toDate().toISOString();
-    } else if (value?.toDate && typeof value.toDate === 'function') {
-      plainObject[key] = value.toDate().toISOString();
-    } else if (value instanceof Date) {
-      plainObject[key] = value.toISOString();
-    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-      // 🔥 THIS IS THE KEY FIX: Recursively convert nested objects
-      plainObject[key] = this.convertDocToPlainObject(value);
-    } else if (Array.isArray(value)) {
-      // Convert arrays that might contain Timestamps
-      plainObject[key] = value.map(item => 
-        (item && typeof item === 'object') ? this.convertDocToPlainObject(item) : item
+    // Remove attempts older than 1 minute
+    const recentAttempts = attempts.filter(time => now - time < 60000);
+    
+    if (recentAttempts.length >= this.maxAttemptsPerMinute) {
+      throw new Error('Too many requests. Please try again later.');
+    }
+    
+    recentAttempts.push(now);
+    this.publicAccessAttempts.set(ip, recentAttempts);
+  }
+
+  // Helper to convert Firestore document to plain object
+  convertDocToPlainObject(docData) {
+    const plainObject = { ...docData };
+    
+    Object.keys(plainObject).forEach(key => {
+      const value = plainObject[key];
+      
+      if (value instanceof Timestamp) {
+        plainObject[key] = value.toDate().toISOString();
+      } else if (value?.toDate && typeof value.toDate === 'function') {
+        plainObject[key] = value.toDate().toISOString();
+      } else if (value instanceof Date) {
+        plainObject[key] = value.toISOString();
+      } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+        plainObject[key] = this.convertDocToPlainObject(value);
+      } else if (Array.isArray(value)) {
+        plainObject[key] = value.map(item => 
+          (item && typeof item === 'object') ? this.convertDocToPlainObject(item) : item
+        );
+      }
+    });
+    
+    return plainObject;
+  }
+
+  // Generate secure bill token with expiry
+  generateBillToken() {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substr(2, 12);
+    return `MITTI_${timestamp}_${random}`.toUpperCase();
+  }
+
+  // Validate bill token format
+  isValidBillTokenFormat(token) {
+    return /^MITTI_[A-Z0-9_]+$/.test(token);
+  }
+
+  // Check if bill token is expired (tokens expire after 90 days)
+  isBillTokenExpired(order) {
+    if (!order.createdAt) return true;
+    
+    const createdDate = order.createdAt instanceof Timestamp 
+      ? order.createdAt.toDate() 
+      : new Date(order.createdAt);
+    
+    const expiryDate = new Date(createdDate);
+    expiryDate.setDate(expiryDate.getDate() + 90); // 90 days expiry
+    
+    return new Date() > expiryDate;
+  }
+
+  // 🔐 SECURE: Public access method for orders by bill token
+  async getOrderByBillToken(billToken, clientIp = 'unknown') {
+    try {
+      // Rate limiting
+      this.checkRateLimit(clientIp);
+      
+      console.log('🔍 Public access attempt for token:', billToken?.slice(0, 10) + '...');
+      
+      // Validate token format first
+      if (!billToken || !this.isValidBillTokenFormat(billToken)) {
+        throw new Error('Invalid invoice link format');
+      }
+
+      // Query orders by billToken
+      const ordersRef = collection(db, 'orders');
+      const q = query(
+        ordersRef, 
+        where('billToken', '==', billToken),
+        limit(1)
       );
-    }
-  });
-  
-  return plainObject;
-}
-
-  // Generic CRUD operations
-  async create(collectionName, data) {
-    try {
-      const docRef = await addDoc(collection(db, collectionName), {
-        ...data,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-        userId: auth.currentUser?.uid
-      });
       
-      // Get the created document to return with proper ID
-      const newDoc = await this.getById(collectionName, docRef.id);
-      return newDoc;
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.warn('🚫 Invoice not found for token:', billToken?.slice(0, 10) + '...');
+        throw new Error('Invoice not found or link has expired');
+      }
+
+      let orderData = null;
+      querySnapshot.forEach((doc) => {
+        const data = this.convertDocToPlainObject(doc.data());
+        orderData = { id: doc.id, ...data };
+      });
+
+      if (!orderData) {
+        throw new Error('Invoice not found');
+      }
+
+      // Check if token is expired
+      if (this.isBillTokenExpired(orderData)) {
+        console.warn('⏰ Expired token access attempt:', billToken?.slice(0, 10) + '...');
+        throw new Error('Invoice link has expired. Please contact us for a new link.');
+      }
+
+      // Remove sensitive data from public response
+      const publicOrderData = this.sanitizeOrderForPublic(orderData);
+
+      console.log('✅ Public invoice access granted:', orderData.id);
+      return publicOrderData;
     } catch (error) {
-      console.error(`Error creating document in ${collectionName}:`, error);
-      throw new Error(`Error creating document: ${error.message}`);
+      console.error('❌ Public invoice access error:', error.message);
+      throw new Error(`Unable to access invoice: ${error.message}`);
     }
   }
 
-  async update(collectionName, id, data) {
-    try {
-      const docRef = doc(db, collectionName, id);
-      
-      // Convert dates to Timestamps for Firestore
-      const updateData = { ...data };
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] instanceof Date) {
-          updateData[key] = Timestamp.fromDate(updateData[key]);
-        } else if (typeof updateData[key] === 'string' && !isNaN(Date.parse(updateData[key]))) {
-          // Check if it's a valid date string
-          const date = new Date(updateData[key]);
-          if (key.includes('Date') || key.includes('At')) {
-            updateData[key] = Timestamp.fromDate(date);
-          }
-        }
-      });
-      
-      await updateDoc(docRef, {
-        ...updateData,
-        updatedAt: Timestamp.now()
-      });
-      
-      // Return updated document
-      return await this.getById(collectionName, id);
-    } catch (error) {
-      console.error(`Error updating document in ${collectionName}:`, error);
-      throw new Error(`Error updating document: ${error.message}`);
+  // Remove sensitive data for public access
+  sanitizeOrderForPublic(orderData) {
+    const sanitized = { ...orderData };
+    
+    // Remove sensitive business data
+    delete sanitized.userId;
+    delete sanitized.internalNotes;
+    delete sanitized.costPrice;
+    delete sanitized.profit;
+    delete sanitized.margin;
+    
+    // Sanitize customer data (keep only name and phone)
+    if (sanitized.customer) {
+      sanitized.customer = {
+        name: sanitized.customer.name,
+        phone: sanitized.customer.phone
+      };
     }
+
+    // Sanitize items (remove cost and profit data)
+    if (sanitized.items) {
+      sanitized.items = sanitized.items.map(item => ({
+        product: {
+          id: item.product?.id,
+          name: item.product?.name,
+          category: item.product?.category
+        },
+        quantity: item.quantity,
+        price: item.price
+      }));
+    }
+
+    return sanitized;
   }
 
-  async delete(collectionName, id) {
-    try {
-      await deleteDoc(doc(db, collectionName, id));
-      return id;
-    } catch (error) {
-      console.error(`Error deleting document from ${collectionName}:`, error);
-      throw new Error(`Error deleting document: ${error.message}`);
-    }
-  }
-
+  // 🔐 SECURE: Authenticated access - user can only see their own orders
   async getById(collectionName, id) {
     try {
       const docRef = doc(db, collectionName, id);
@@ -115,7 +188,14 @@ convertDocToPlainObject(docData) {
       
       if (docSnap.exists()) {
         const data = this.convertDocToPlainObject(docSnap.data());
-        return { id: docSnap.id, ...data };
+        const document = { id: docSnap.id, ...data };
+        
+        // 🔒 SECURITY CHECK: Ensure user can only access their own documents
+        if (auth.currentUser && document.userId && document.userId !== auth.currentUser.uid) {
+          throw new Error('Access denied: You can only view your own records');
+        }
+        
+        return document;
       } else {
         throw new Error('Document not found');
       }
@@ -125,20 +205,26 @@ convertDocToPlainObject(docData) {
     }
   }
 
-  // Enhanced getAll method that supports both authenticated and public access
+  // 🔐 SECURE: Get all documents with user filtering
   async getAll(collectionName, options = {}) {
     try {
       let q = collection(db, collectionName);
 
-      // Handle WHERE conditions first
+      // 🔒 SECURITY: Always filter by current user for authenticated requests
+      if (auth.currentUser) {
+        q = query(q, where('userId', '==', auth.currentUser.uid));
+      } else {
+        // If no user is authenticated, return empty array
+        return [];
+      }
+
+      // Handle additional WHERE conditions
       if (options.where && Array.isArray(options.where)) {
         options.where.forEach(condition => {
-          // Convert date values to Timestamps if needed
           let value = condition.value;
           if (value instanceof Date) {
             value = Timestamp.fromDate(value);
           }
-          
           q = query(q, where(condition.field, condition.operator, value));
         });
       }
@@ -146,8 +232,7 @@ convertDocToPlainObject(docData) {
       // Add orderBy if specified
       if (options.orderBy) {
         q = query(q, orderBy(options.orderBy.field, options.orderBy.direction || 'desc'));
-      } else if (!options.where || options.where.length === 0) {
-        // Only add default ordering if no where conditions (to avoid index issues)
+      } else {
         q = query(q, orderBy('createdAt', 'desc'));
       }
 
@@ -163,100 +248,89 @@ convertDocToPlainObject(docData) {
         docs.push({ id: doc.id, ...data });
       });
 
-      // Apply additional client-side filtering if needed
-      docs = this.applyClientSideFilters(docs, options);
-
       return docs;
     } catch (error) {
       console.error(`Error getting documents from ${collectionName}:`, error);
-
-      // If getting index errors, fall back to simple query
-      if (error.code === 'failed-precondition' || error.message.includes('index')) {
-        console.warn('Index error detected, falling back to simple query...');
-        return this.getAllWithoutFilters(collectionName, options);
-      }
-
-      throw new Error(`Error getting documents: ${error.message}`);
+      return [];
     }
   }
 
-  // 🆕 NEW: Public access method for orders by bill token (no auth required)
-  async getOrderByBillToken(billToken) {
+  // 🔐 SECURE: Create with user ID
+  async create(collectionName, data) {
     try {
-      console.log('🔍 Searching for order with bill token:', billToken);
-      
-      // Query orders by billToken - this works without authentication
-      const ordersRef = collection(db, 'orders');
-      const q = query(
-        ordersRef, 
-        where('billToken', '==', billToken),
-        limit(1)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        throw new Error('Invoice not found or link has expired');
+      if (!auth.currentUser) {
+        throw new Error('Authentication required');
       }
 
-      let orderData = null;
-      querySnapshot.forEach((doc) => {
-        const data = this.convertDocToPlainObject(doc.data());
-        orderData = { id: doc.id, ...data };
+      const docRef = await addDoc(collection(db, collectionName), {
+        ...data,
+        userId: auth.currentUser.uid, // 🔒 Always set user ID
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
       });
-
-      if (!orderData) {
-        throw new Error('Invoice not found');
-      }
-
-      console.log('✅ Order found for public access:', orderData.id);
-      return orderData;
+      
+      return await this.getById(collectionName, docRef.id);
     } catch (error) {
-      console.error('❌ Error getting order by bill token:', error);
-      throw new Error(`Error accessing invoice: ${error.message}`);
+      console.error(`Error creating document in ${collectionName}:`, error);
+      throw new Error(`Error creating document: ${error.message}`);
     }
   }
 
-  // Fallback method - gets all documents without any Firestore filtering
-  async getAllWithoutFilters(collectionName, options = {}) {
+  // 🔐 SECURE: Update with user verification
+  async update(collectionName, id, data) {
     try {
-      const q = collection(db, collectionName);
-      const querySnapshot = await getDocs(q);
+      if (!auth.currentUser) {
+        throw new Error('Authentication required');
+      }
+
+      // First verify the user owns this document
+      const existingDoc = await this.getById(collectionName, id);
+      if (existingDoc.userId !== auth.currentUser.uid) {
+        throw new Error('Access denied: You can only update your own records');
+      }
+
+      const docRef = doc(db, collectionName, id);
+      await updateDoc(docRef, {
+        ...data,
+        updatedAt: Timestamp.now()
+      });
       
-      let docs = [];
-      querySnapshot.forEach((doc) => {
-        const data = this.convertDocToPlainObject(doc.data());
-        docs.push({ id: doc.id, ...data });
-      });
-
-      // Filter by user on client side (only for authenticated requests)
-      if (auth.currentUser) {
-        docs = docs.filter(doc => doc.userId === auth.currentUser.uid);
-      }
-
-      // Apply all filters on client side
-      docs = this.applyClientSideFilters(docs, options);
-
-      // Sort on client side
-      docs.sort((a, b) => {
-        const aDate = new Date(a.createdAt);
-        const bDate = new Date(b.createdAt);
-        return bDate - aDate; // Descending order
-      });
-
-      // Apply limit on client side
-      if (options.limit) {
-        docs = docs.slice(0, options.limit);
-      }
-
-      return docs;
+      return await this.getById(collectionName, id);
     } catch (error) {
-      console.error(`Error in fallback query for ${collectionName}:`, error);
-      return []; // Return empty array instead of throwing
+      console.error(`Error updating document in ${collectionName}:`, error);
+      throw new Error(`Error updating document: ${error.message}`);
     }
   }
 
-  // Apply filters on client side to avoid index requirements
+  // 🔐 SECURE: Delete with user verification
+  async delete(collectionName, id) {
+    try {
+      if (!auth.currentUser) {
+        throw new Error('Authentication required');
+      }
+
+      // First verify the user owns this document
+      const existingDoc = await this.getById(collectionName, id);
+      if (existingDoc.userId !== auth.currentUser.uid) {
+        throw new Error('Access denied: You can only delete your own records');
+      }
+
+      await deleteDoc(doc(db, collectionName, id));
+      return id;
+    } catch (error) {
+      console.error(`Error deleting document from ${collectionName}:`, error);
+      throw new Error(`Error deleting document: ${error.message}`);
+    }
+  }
+
+  // Helper to get nested field values
+  getNestedFieldValue(obj, fieldPath) {
+    return fieldPath.split('.').reduce((current, field) => {
+      return current && current[field] !== undefined ? current[field] : undefined;
+    }, obj);
+  }
+
+  // Apply filters on client side
   applyClientSideFilters(docs, options) {
     if (!options.where) return docs;
 
@@ -265,7 +339,6 @@ convertDocToPlainObject(docData) {
         let fieldValue = this.getNestedFieldValue(doc, condition.field);
         let targetValue = condition.value;
         
-        // Convert date strings to Date objects for comparison
         if (typeof fieldValue === 'string' && !isNaN(Date.parse(fieldValue))) {
           fieldValue = new Date(fieldValue);
         }
@@ -274,45 +347,32 @@ convertDocToPlainObject(docData) {
         }
         
         switch (condition.operator) {
-          case '==':
-            return fieldValue === targetValue;
-          case '!=':
-            return fieldValue !== targetValue;
-          case '>':
-            return fieldValue > targetValue;
-          case '>=':
-            return fieldValue >= targetValue;
-          case '<':
-            return fieldValue < targetValue;
-          case '<=':
-            return fieldValue <= targetValue;
-          case 'in':
-            return Array.isArray(targetValue) && targetValue.includes(fieldValue);
-          case 'array-contains':
-            return Array.isArray(fieldValue) && fieldValue.includes(targetValue);
-          default:
-            return true;
+          case '==': return fieldValue === targetValue;
+          case '!=': return fieldValue !== targetValue;
+          case '>': return fieldValue > targetValue;
+          case '>=': return fieldValue >= targetValue;
+          case '<': return fieldValue < targetValue;
+          case '<=': return fieldValue <= targetValue;
+          case 'in': return Array.isArray(targetValue) && targetValue.includes(fieldValue);
+          case 'array-contains': return Array.isArray(fieldValue) && fieldValue.includes(targetValue);
+          default: return true;
         }
       });
     });
   }
 
-  // Helper to get nested field values (e.g., "address.city")
-  getNestedFieldValue(obj, fieldPath) {
-    return fieldPath.split('.').reduce((current, field) => {
-      return current && current[field] !== undefined ? current[field] : undefined;
-    }, obj);
-  }
-
-  // Simplified real-time listener
+  // 🔐 SECURE: Real-time listener with user filtering
   onSnapshot(collectionName, callback, options = {}) {
     try {
+      if (!auth.currentUser) {
+        callback([]);
+        return () => {};
+      }
+
       let q = collection(db, collectionName);
       
-      // Simple query to avoid index issues
-      if (auth.currentUser) {
-        q = query(q, where('userId', '==', auth.currentUser.uid));
-      }
+      // Always filter by current user
+      q = query(q, where('userId', '==', auth.currentUser.uid));
 
       return onSnapshot(q, (querySnapshot) => {
         const docs = [];
@@ -321,10 +381,8 @@ convertDocToPlainObject(docData) {
           docs.push({ id: doc.id, ...data });
         });
         
-        // Apply filters and sorting on client side
         const filteredDocs = this.applyClientSideFilters(docs, options);
         
-        // Sort by createdAt
         filteredDocs.sort((a, b) => {
           const aDate = new Date(a.createdAt);
           const bDate = new Date(b.createdAt);
@@ -334,19 +392,12 @@ convertDocToPlainObject(docData) {
         callback(filteredDocs);
       }, (error) => {
         console.error(`Error in snapshot listener for ${collectionName}:`, error);
-        callback([]); // Return empty array on error
+        callback([]);
       });
     } catch (error) {
       console.error(`Error setting up snapshot listener for ${collectionName}:`, error);
-      return () => {}; // Return empty unsubscribe function
+      return () => {};
     }
-  }
-
-  // Generate unique ID for orders/bills
-  generateId(prefix = '') {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 5);
-    return `${prefix}${timestamp}${random}`.toUpperCase();
   }
 }
 
