@@ -4,7 +4,7 @@
 class SMSService {
   constructor() {
     // Set the base URL for the local API endpoint
-    this.baseURL = 'http://localhost:3000/api';
+    this.baseURL = '/api';
     this.timeout = 10000; // Request timeout in milliseconds
   }
 
