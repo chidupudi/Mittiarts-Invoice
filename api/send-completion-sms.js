@@ -1,4 +1,4 @@
-// api/send-completion-sms.js - Fast2SMS Implementation for Mitti Arts Payment Completion
+// api/send-completion-sms.js - Corrected Fast2SMS Implementation for Payment Completion
 export default async function handler(req, res) {
   // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,10 +21,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // Initialize variables
-  let cleanNumber = '';
-  let formattedNumber = '';
-
   try {
     console.log('📱 Fast2SMS Payment Completion SMS Request:', {
       method: req.method,
@@ -32,9 +28,8 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     });
 
-    // Fast2SMS API Configuration
+    // Fast2SMS API Configuration (Official)
     const FAST2SMS_API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
-    const FAST2SMS_ROUTE = 'q'; // Quick route (non-DLT)
     const FAST2SMS_URL = 'https://www.fast2sms.com/dev/bulkV2';
 
     // Extract and validate request data
@@ -84,8 +79,8 @@ export default async function handler(req, res) {
     }
 
     // Clean and validate Indian phone number
-    cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
-    formattedNumber = `+91${cleanNumber}`;
+    const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
+    const formattedNumber = `+91${cleanNumber}`;
     
     // Validate Indian mobile number format (10 digits starting with 6, 7, 8, or 9)
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
@@ -100,15 +95,7 @@ export default async function handler(req, res) {
     // Validate final amount
     const finalPayment = Number(finalAmount);
     
-    if (finalPayment < 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Final payment amount cannot be negative',
-        smsType: 'completion'
-      });
-    }
-
-    if (finalPayment === 0) {
+    if (finalPayment <= 0) {
       return res.status(400).json({
         success: false,
         error: 'Final payment amount must be greater than zero',
@@ -134,7 +121,7 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create payment completion SMS message for Mitti Arts pottery business
+    // Create payment completion SMS message for Mitti Arts
     const message = `Dear ${customerName.trim()},
 
 🎉 Payment completed for Mitti Arts order!
@@ -166,23 +153,24 @@ Contact: 9441550927
       });
     }
 
-    // Prepare Fast2SMS API parameters (GET method)
-    const smsParams = new URLSearchParams({
-      authorization: FAST2SMS_API_KEY,
+    // Prepare Fast2SMS API payload (POST method as per official docs)
+    const payload = {
       message: message,
-      route: FAST2SMS_ROUTE,
+      route: 'q', // Quick route (no DLT required)
       numbers: cleanNumber,
       flash: '0'
-    });
+    };
 
-    // Send SMS via Fast2SMS API
+    // Send SMS via Fast2SMS API (POST method)
     console.log('📡 Calling Fast2SMS API for payment completion...');
-    const fast2smsResponse = await fetch(`${FAST2SMS_URL}?${smsParams.toString()}`, {
-      method: 'GET',
+    const fast2smsResponse = await fetch(FAST2SMS_URL, {
+      method: 'POST',
       headers: {
-        'cache-control': 'no-cache',
-        'User-Agent': 'Mitti-Arts-POS/1.0'
-      }
+        'authorization': FAST2SMS_API_KEY,
+        'Content-Type': 'application/json',
+        'cache-control': 'no-cache'
+      },
+      body: JSON.stringify(payload)
     });
 
     console.log('📊 Fast2SMS Response Status:', fast2smsResponse.status);
@@ -206,10 +194,10 @@ Contact: 9441550927
         billToken: billToken || null,
         billLink: billLink,
         provider: 'Fast2SMS',
-        route: FAST2SMS_ROUTE,
+        route: 'Quick SMS',
         sentAt: new Date().toISOString(),
         phoneNumber: formattedNumber,
-        cost: 'Rs.0.25-0.50 per SMS',
+        cost: 'Rs.5.00 per SMS',
         
         // Payment completion specific data
         completionDetails: {
@@ -228,10 +216,18 @@ Contact: 9441550927
         }
       });
     } else {
-      // Fast2SMS returned error
-      const errorMsg = fast2smsData.message?.[0] || 
-                      fast2smsData.message || 
-                      'Unknown Fast2SMS API error';
+      // Fast2SMS returned error - FIXED: Proper error message handling
+      let errorMsg = 'Unknown Fast2SMS API error';
+      
+      if (fast2smsData.message) {
+        if (Array.isArray(fast2smsData.message)) {
+          // If message is an array, join all error messages
+          errorMsg = fast2smsData.message.join(', ');
+        } else {
+          // If message is a string
+          errorMsg = fast2smsData.message;
+        }
+      }
       
       console.error('❌ Fast2SMS Completion SMS Error:', errorMsg);
       console.error('❌ Full Fast2SMS Response:', fast2smsData);
@@ -254,14 +250,20 @@ Contact: 9441550927
         
         troubleshooting: {
           possibleCauses: [
-            'Invalid API key',
-            'Insufficient Fast2SMS balance',
-            'Invalid phone number',
-            'Route not active',
-            'Message content blocked'
+            'Invalid or expired API key',
+            'Insufficient Fast2SMS account balance',
+            'Invalid phone number format',
+            'Message content blocked',
+            'API rate limits exceeded'
+          ],
+          solutions: [
+            'Check Fast2SMS account balance',
+            'Verify API key is correct and active',
+            'Check phone number format',
+            'Review message content for prohibited words'
           ],
           checkBalance: 'https://www.fast2sms.com/dashboard',
-          documentation: 'https://www.fast2sms.com/docs'
+          documentation: 'https://docs.fast2sms.com'
         }
       });
     }
@@ -319,7 +321,7 @@ Contact: 9441550927
       // Helpful troubleshooting information
       troubleshooting: {
         apiStatus: 'https://www.fast2sms.com/dashboard',
-        documentation: 'https://www.fast2sms.com/docs',
+        documentation: 'https://docs.fast2sms.com',
         support: 'Check Fast2SMS balance and API key validity'
       }
     });
