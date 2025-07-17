@@ -1,284 +1,355 @@
-import React, { useState, useEffect } from 'react';
+// src/components/advance-payments/AdvancePayments.js - Enhanced Mitti Arts Advance Payments with SMS Integration
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Table,
   Button,
-  Typography,
+  Modal,
+  Form,
+  InputNumber,
+  Select,
+  Input,
+  DatePicker,
   Space,
+  Typography,
   Tag,
   Row,
   Col,
   Statistic,
-  Modal,
-  Form,
-  Input,
-  Select,
-  InputNumber,
-  message,
   Alert,
+  message,
   Tooltip,
-  Badge,
-  Timeline,
-  Descriptions,
+  Spin,
   Divider,
-  DatePicker,
-  Tabs
+  Badge,
+  Popconfirm
 } from 'antd';
 import {
   PayCircleOutlined,
-  DollarOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  WarningOutlined,
+  ExclamationCircleOutlined,
   EyeOutlined,
-  PrinterOutlined,
-  CalendarOutlined,
-  UserOutlined,
-  ShopOutlined,
-  HistoryOutlined,
-  MoneyCollectOutlined,
-  CreditCardOutlined,
-  BankOutlined
+  DollarOutlined,
+  SendOutlined,
+  PhoneOutlined,
+  ReloadOutlined,
+  FilterOutlined,
+  MessageOutlined,
+  BellOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import {
   fetchOrders,
-  completeAdvancePayment
+  completeAdvancePayment,
+  calculateAdvanceAnalytics,
+  getAdvancePaymentHistory
 } from '../../features/order/orderSlice';
+import smsService from '../../services/smsService';
 import moment from 'moment';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-const { TabPane } = Tabs;
+const { TextArea } = Input;
+const { RangePicker } = DatePicker;
 
 const AdvancePayments = () => {
   const dispatch = useDispatch();
-  const { items: orders, loading } = useSelector(state => state.orders);
+  const navigate = useNavigate();
+  
+  // Redux state
+  const { 
+    items: orders = [], 
+    loading, 
+    error,
+    advanceAnalytics = {}
+  } = useSelector(state => state.orders);
 
-  // Component state
-  const [activeTab, setActiveTab] = useState('pending');
-  const [paymentModal, setPaymentModal] = useState(false);
-  const [selectedAdvance, setSelectedAdvance] = useState(null);
-  const [detailsModal, setDetailsModal] = useState(false);
+  // Local state
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [paymentForm] = Form.useForm();
-
-  // Payment processing state
-  const [processingPayment, setProcessingPayment] = useState(false);
-
-  // Load orders on component mount
-  useEffect(() => {
-    dispatch(fetchOrders({
-      isAdvanceBilling: true,
-      limit: 200
-    }));
-  }, [dispatch]);
-
-  // Filter advance orders
-  const advanceOrders = orders.filter(order => order.isAdvanceBilling);
-  const pendingAdvances = advanceOrders.filter(order => order.remainingAmount > 0);
-  const completedAdvances = advanceOrders.filter(order => order.remainingAmount <= 0);
+  const [reminderForm] = Form.useForm();
+  const [smsLoading, setSmsLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    overdue: false,
+    dateRange: null,
+    search: ''
+  });
 
   // Bank options for Mitti Arts
   const bankOptions = [
     'Art of Indian pottery',
-    'Swadeshi pottery',
+    'Swadeshi pottery', 
     'Telangana Shilpakala',
     'Clay Ganesha shoba'
   ];
 
-  // Handle payment completion
-  const handleCompletePayment = async () => {
-    if (!selectedAdvance) return;
+  // Load data on component mount
+  useEffect(() => {
+    loadAdvanceOrders();
+    dispatch(calculateAdvanceAnalytics());
+  }, [dispatch]);
 
-    setProcessingPayment(true);
+  // Filter orders when data or filters change
+  useEffect(() => {
+    filterOrders();
+  }, [orders, filters]);
+
+  const loadAdvanceOrders = async () => {
     try {
-      const values = await paymentForm.validateFields();
-
-      // Validate payment amount
-      if (values.paymentAmount > selectedAdvance.remainingAmount) {
-        message.error('Payment amount cannot exceed remaining balance');
-        return;
-      }
-
-      if (values.paymentAmount <= 0) {
-        message.error('Payment amount must be greater than 0');
-        return;
-      }
-
-      // Complete the advance payment
-      const result = await dispatch(completeAdvancePayment({
-        orderId: selectedAdvance.id,
-        paymentAmount: values.paymentAmount,
-        paymentMethod: values.paymentMethod,
-        bankDetails: values.paymentMethod !== 'Cash' ? values.bankDetails : undefined,
-        notes: values.notes
-      }));
-
-      if (completeAdvancePayment.fulfilled.match(result)) {
-        const isFullyPaid = values.paymentAmount === selectedAdvance.remainingAmount;
-
-        message.success(
-          isFullyPaid
-            ? 'Payment completed! New invoice generated successfully.'
-            : 'Partial payment recorded successfully.'
-        );
-
-        // Close modal and refresh data
-        setPaymentModal(false);
-        setSelectedAdvance(null);
-        paymentForm.resetFields();
-
-        // Refresh orders data
-        dispatch(fetchOrders({
-          isAdvanceBilling: true,
-          limit: 200
-        }));
-
-        if (isFullyPaid) {
-          // Show success message about new invoice
-          Modal.success({
-            title: 'Payment Completed!',
-            content: `Order ${selectedAdvance.orderNumber} is now fully paid. A new invoice has been generated and the order has been moved to completed orders.`,
-            onOk: () => {
-              // Optionally navigate to the new invoice
-              // navigate(`/invoices/${result.payload.id}`);
-            }
-          });
-        }
-      }
+      await dispatch(fetchOrders({ 
+        isAdvanceBilling: true,
+        limit: 200 
+      })).unwrap();
     } catch (error) {
-      message.error('Failed to process payment');
-    } finally {
-      setProcessingPayment(false);
+      console.error('Failed to load advance orders:', error);
+      message.error('Failed to load advance payments');
     }
   };
 
-  // Open payment modal
-  const openPaymentModal = (advance) => {
-    setSelectedAdvance(advance);
-    paymentForm.setFieldsValue({
-      paymentAmount: advance.remainingAmount,
-      paymentMethod: 'Cash',
-      bankDetails: '',
-      notes: ''
+  const filterOrders = () => {
+    let filtered = orders.filter(order => order.isAdvanceBilling);
+
+    // Status filter
+    if (filters.status === 'pending') {
+      filtered = filtered.filter(order => order.remainingAmount > 0);
+    } else if (filters.status === 'completed') {
+      filtered = filtered.filter(order => order.remainingAmount <= 0);
+    }
+
+    // Overdue filter
+    if (filters.overdue) {
+      filtered = filtered.filter(order => {
+        if (order.remainingAmount <= 0) return false;
+        const orderDate = moment(order.createdAt?.toDate?.() || order.createdAt);
+        const dueDate = orderDate.clone().add(order.businessType === 'wholesale' ? 30 : 7, 'days');
+        return moment().isAfter(dueDate);
+      });
+    }
+
+    // Date range filter
+    if (filters.dateRange && filters.dateRange.length === 2) {
+      const [start, end] = filters.dateRange;
+      filtered = filtered.filter(order => {
+        const orderDate = moment(order.createdAt?.toDate?.() || order.createdAt);
+        return orderDate.isBetween(start, end, 'day', '[]');
+      });
+    }
+
+    // Search filter
+    if (filters.search) {
+      const searchTerm = filters.search.toLowerCase();
+      filtered = filtered.filter(order => 
+        order.orderNumber?.toLowerCase().includes(searchTerm) ||
+        order.customer?.name?.toLowerCase().includes(searchTerm) ||
+        order.customer?.phone?.includes(searchTerm)
+      );
+    }
+
+    // Sort by creation date (newest first)
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.createdAt?.toDate?.() || a.createdAt);
+      const dateB = new Date(b.createdAt?.toDate?.() || b.createdAt);
+      return dateB - dateA;
     });
-    setPaymentModal(true);
+
+    setFilteredOrders(filtered);
   };
 
-  // Open details modal
-  const openDetailsModal = (advance) => {
-    setSelectedAdvance(advance);
-    setDetailsModal(true);
+  const handleCompletePayment = async (values) => {
+    try {
+      console.log('Completing advance payment:', values);
+      
+      const result = await dispatch(completeAdvancePayment({
+        orderId: selectedOrder.id,
+        paymentAmount: values.paymentAmount,
+        paymentMethod: values.paymentMethod,
+        bankDetails: values.paymentMethod !== 'Cash' ? values.bank : null,
+        notes: values.notes || ''
+      })).unwrap();
+
+      message.success('Payment completed successfully!');
+      
+      // Send completion SMS if customer has valid phone
+      if (selectedOrder.customer?.phone && smsService.isValidPhoneNumber(selectedOrder.customer.phone)) {
+        setSmsLoading(true);
+        try {
+          const smsResult = await smsService.sendPaymentCompletionSMS(
+            selectedOrder.customer.phone,
+            selectedOrder.customer.name,
+            selectedOrder.orderNumber,
+            values.paymentAmount,
+            result.billToken || selectedOrder.billToken
+          );
+
+          if (smsResult.success) {
+            message.success('Payment completion SMS sent successfully!');
+          } else {
+            message.warning('Payment completed but SMS failed to send');
+          }
+        } catch (smsError) {
+          console.error('SMS Error:', smsError);
+          message.warning('Payment completed but SMS failed to send');
+        } finally {
+          setSmsLoading(false);
+        }
+      }
+
+      setShowPaymentModal(false);
+      setSelectedOrder(null);
+      paymentForm.resetFields();
+      loadAdvanceOrders();
+      dispatch(calculateAdvanceAnalytics());
+      
+    } catch (error) {
+      console.error('Payment completion error:', error);
+      message.error(error || 'Failed to complete payment');
+    }
   };
 
-  // Calculate analytics
-  const analytics = {
-    totalPending: pendingAdvances.length,
-    totalPendingAmount: pendingAdvances.reduce((sum, order) => sum + order.remainingAmount, 0),
-    totalAdvanceCollected: advanceOrders.reduce((sum, order) => sum + (order.advanceAmount || 0), 0),
-    totalCompleted: completedAdvances.length
+  const handleSendReminder = async (values) => {
+    try {
+      setSmsLoading(true);
+      
+      const orderDate = moment(selectedOrder.createdAt?.toDate?.() || selectedOrder.createdAt);
+      const dueDate = orderDate.clone().add(selectedOrder.businessType === 'wholesale' ? 30 : 7, 'days');
+      const daysOverdue = moment().diff(dueDate, 'days');
+      
+      const smsResult = await smsService.sendAdvanceReminderSMS(
+        selectedOrder.customer.phone,
+        selectedOrder.customer.name,
+        selectedOrder.orderNumber,
+        selectedOrder.remainingAmount,
+        Math.max(0, daysOverdue)
+      );
+
+      if (smsResult.success) {
+        message.success('Reminder SMS sent successfully!');
+        setShowReminderModal(false);
+        setSelectedOrder(null);
+        reminderForm.resetFields();
+      } else {
+        message.error(`Failed to send reminder: ${smsResult.error}`);
+      }
+    } catch (error) {
+      console.error('Reminder SMS error:', error);
+      message.error('Failed to send reminder SMS');
+    } finally {
+      setSmsLoading(false);
+    }
   };
 
-  // Table columns for pending advances
-  const pendingColumns = [
+  const getDaysOverdue = (order) => {
+    const orderDate = moment(order.createdAt?.toDate?.() || order.createdAt);
+    const dueDate = orderDate.clone().add(order.businessType === 'wholesale' ? 30 : 7, 'days');
+    return Math.max(0, moment().diff(dueDate, 'days'));
+  };
+
+  const getStatusTag = (order) => {
+    if (order.remainingAmount <= 0) {
+      return <Tag color="green" icon={<CheckCircleOutlined />}>Completed</Tag>;
+    }
+    
+    const daysOverdue = getDaysOverdue(order);
+    if (daysOverdue > 0) {
+      return <Tag color="red" icon={<ExclamationCircleOutlined />}>Overdue ({daysOverdue}d)</Tag>;
+    }
+    
+    return <Tag color="orange" icon={<ClockCircleOutlined />}>Pending</Tag>;
+  };
+
+  const columns = [
     {
       title: 'Order Details',
       key: 'orderDetails',
+      width: 200,
       render: (_, record) => (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <Text strong style={{ color: '#8b4513' }}>{record.orderNumber}</Text>
-            <Tag color={record.businessType === 'wholesale' ? 'orange' : 'blue'} size="small">
-              {record.businessType === 'wholesale' ? 'Wholesale' : 'Retail'}
-            </Tag>
+          <Text strong style={{ color: '#8b4513' }}>
+            {record.orderNumber}
+          </Text>
+          <br />
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {moment(record.createdAt?.toDate?.() || record.createdAt).format('DD/MM/YY HH:mm')}
+          </Text>
+          <br />
+          <Tag color={record.businessType === 'wholesale' ? 'orange' : 'blue'} size="small">
+            {record.businessType === 'wholesale' ? '🏪 Wholesale' : '🛍️ Retail'}
+          </Tag>
+        </div>
+      ),
+    },
+    {
+      title: 'Customer',
+      key: 'customer',
+      width: 150,
+      render: (_, record) => (
+        <div>
+          <Text strong>{record.customer?.name || 'Walk-in Customer'}</Text>
+          {record.customer?.phone && (
+            <div>
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                <PhoneOutlined /> {record.customer.phone}
+              </Text>
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Payment Summary',
+      key: 'paymentSummary',
+      width: 180,
+      render: (_, record) => (
+        <div>
+          <div style={{ marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Total: </Text>
+            <Text strong>₹{record.total?.toFixed(2)}</Text>
           </div>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            <div><UserOutlined /> {record.customer?.name || 'Walk-in Customer'}</div>
-            <div><CalendarOutlined /> {moment(record.createdAt?.toDate?.() || record.createdAt).format('DD MMM YYYY')}</div>
-            <div><ShopOutlined /> {record.branchInfo?.name || 'Unknown Branch'}</div>
+          <div style={{ marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Advance: </Text>
+            <Text style={{ color: '#52c41a' }}>₹{(record.advanceAmount || 0).toFixed(2)}</Text>
+          </div>
+          <div>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Remaining: </Text>
+            <Text strong style={{ color: record.remainingAmount > 0 ? '#fa541c' : '#52c41a' }}>
+              ₹{(record.remainingAmount || 0).toFixed(2)}
+            </Text>
           </div>
         </div>
       ),
     },
     {
-      title: 'Payment Status',
-      key: 'paymentStatus',
-      width: 200,
-      render: (_, record) => {
-        const progress = ((record.advanceAmount || 0) / record.total) * 100;
-
-        return (
-          <div>
-            <Row gutter={8} style={{ marginBottom: 8 }}>
-              <Col span={12}>
-                <Statistic
-                  title="Total Amount"
-                  value={record.total}
-                  prefix="₹"
-                  valueStyle={{ fontSize: '14px' }}
-                  formatter={(value) => `${(value / 1000).toFixed(1)}k`}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="Advance Paid"
-                  value={record.advanceAmount || 0}
-                  prefix="₹"
-                  valueStyle={{ fontSize: '14px', color: '#52c41a' }}
-                  formatter={(value) => `${(value / 1000).toFixed(1)}k`}
-                />
-              </Col>
-            </Row>
-            <div style={{ marginBottom: 4 }}>
-              <Text strong style={{ color: '#fa541c' }}>
-                Remaining: ₹{record.remainingAmount?.toFixed(2) || '0.00'}
-              </Text>
-            </div>
-            <div style={{
-              width: '100%',
-              height: '6px',
-              backgroundColor: '#f0f0f0',
-              borderRadius: '3px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                width: `${progress}%`,
-                height: '100%',
-                backgroundColor: progress >= 100 ? '#52c41a' : '#fa8c16',
-                transition: 'width 0.3s ease'
-              }} />
-            </div>
-            <Text style={{ fontSize: '11px', color: '#666' }}>
-              {progress.toFixed(1)}% paid
-            </Text>
-          </div>
-        );
-      },
+      title: 'Status',
+      key: 'status',
+      width: 120,
+      align: 'center',
+      render: (_, record) => getStatusTag(record),
     },
     {
       title: 'Due Date',
       key: 'dueDate',
-      width: 120,
+      width: 100,
       render: (_, record) => {
-        // Calculate due date (30 days from order for wholesale, 7 for retail)
         const orderDate = moment(record.createdAt?.toDate?.() || record.createdAt);
         const dueDate = orderDate.clone().add(record.businessType === 'wholesale' ? 30 : 7, 'days');
-        const isOverdue = moment().isAfter(dueDate);
-
+        const daysOverdue = getDaysOverdue(record);
+        
         return (
-          <div>
-            <div style={{ color: isOverdue ? '#ff4d4f' : '#666' }}>
-              {dueDate.format('DD MMM')}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '12px' }}>
+              {dueDate.format('DD/MM/YY')}
             </div>
-            {isOverdue && (
-              <Tag color="red" size="small">
-                <ClockCircleOutlined /> Overdue
-              </Tag>
-            )}
-            {!isOverdue && (
-              <div style={{ fontSize: '11px', color: '#666' }}>
-                {dueDate.fromNow()}
-              </div>
+            {daysOverdue > 0 && (
+              <Text type="danger" style={{ fontSize: '11px' }}>
+                {daysOverdue}d overdue
+              </Text>
             )}
           </div>
         );
@@ -288,126 +359,76 @@ const AdvancePayments = () => {
       title: 'Actions',
       key: 'actions',
       width: 150,
+      fixed: 'right',
       render: (_, record) => (
         <Space direction="vertical" size="small">
-          <Space>
-            <Tooltip title="View Details">
+          <Space size="small">
+            <Tooltip title="View Invoice">
               <Button
                 icon={<EyeOutlined />}
                 size="small"
-                onClick={() => openDetailsModal(record)}
+                onClick={() => navigate(`/invoices/${record.id}`)}
+                style={{ backgroundColor: '#8b4513', borderColor: '#8b4513', color: 'white' }}
               />
             </Tooltip>
-            <Tooltip title="Print Current Invoice">
-              <Button
-                icon={<PrinterOutlined />}
-                size="small"
-                onClick={() => window.open(`/invoices/${record.id}`, '_blank')}
-              />
-            </Tooltip>
+            {record.remainingAmount > 0 && (
+              <Tooltip title="Complete Payment">
+                <Button
+                  icon={<DollarOutlined />}
+                  size="small"
+                  type="primary"
+                  onClick={() => {
+                    setSelectedOrder(record);
+                    setShowPaymentModal(true);
+                    paymentForm.setFieldsValue({
+                      paymentAmount: record.remainingAmount,
+                      paymentMethod: 'Cash'
+                    });
+                  }}
+                />
+              </Tooltip>
+            )}
           </Space>
-          <Button
-            type="primary"
-            size="small"
-            icon={<PayCircleOutlined />}
-            onClick={() => openPaymentModal(record)}
-            block
-            style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
-          >
-            Accept Payment
-          </Button>
+          {record.remainingAmount > 0 && record.customer?.phone && smsService.isValidPhoneNumber(record.customer.phone) && (
+            <Button
+              icon={<MessageOutlined />}
+              size="small"
+              onClick={() => {
+                setSelectedOrder(record);
+                setShowReminderModal(true);
+              }}
+              style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16', color: 'white' }}
+            >
+              Remind
+            </Button>
+          )}
         </Space>
       ),
     },
   ];
 
-  // Table columns for completed advances
-  const completedColumns = [
-    {
-      title: 'Order Details',
-      key: 'orderDetails',
-      render: (_, record) => (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <Text strong style={{ color: '#8b4513' }}>{record.orderNumber}</Text>
-            <Tag color="green" size="small">
-              <CheckCircleOutlined /> Completed
-            </Tag>
-          </div>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            <div><UserOutlined /> {record.customer?.name || 'Walk-in Customer'}</div>
-            <div><CalendarOutlined /> Completed: {moment(record.completedAt).format('DD MMM YYYY')}</div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Payment Summary',
-      key: 'paymentSummary',
-      render: (_, record) => (
-        <div>
-          <Row gutter={8}>
-            <Col span={8}>
-              <Statistic
-                title="Total"
-                value={record.total}
-                prefix="₹"
-                valueStyle={{ fontSize: '13px' }}
-              />
-            </Col>
-            <Col span={8}>
-              <Statistic
-                title="Advance"
-                value={record.advanceAmount}
-                prefix="₹"
-                valueStyle={{ fontSize: '13px', color: '#fa8c16' }}
-              />
-            </Col>
-            <Col span={8}>
-              <Statistic
-                title="Final"
-                value={record.total - record.advanceAmount}
-                prefix="₹"
-                valueStyle={{ fontSize: '13px', color: '#52c41a' }}
-              />
-            </Col>
-          </Row>
-        </div>
-      ),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 120,
-      render: (_, record) => (
-        <Space>
-          <Tooltip title="View Details">
-            <Button
-              icon={<EyeOutlined />}
-              size="small"
-              onClick={() => openDetailsModal(record)}
-            />
-          </Tooltip>
-          <Tooltip title="View Final Invoice">
-            <Button
-              icon={<PrinterOutlined />}
-              size="small"
-              type="primary"
-              onClick={() => window.open(`/invoices/${record.id}`, '_blank')}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
-  ];
+  // Calculate summary stats
+  const pendingOrders = filteredOrders.filter(order => order.remainingAmount > 0);
+  const completedOrders = filteredOrders.filter(order => order.remainingAmount <= 0);
+  const totalPendingAmount = pendingOrders.reduce((sum, order) => sum + (order.remainingAmount || 0), 0);
+  const totalAdvanceCollected = filteredOrders.reduce((sum, order) => sum + (order.advanceAmount || 0), 0);
+  const overdueOrders = pendingOrders.filter(order => getDaysOverdue(order) > 0);
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '50px' }}>
+        <Spin size="large" tip="Loading advance payments..." />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 24, backgroundColor: '#fafafa' }}>
+    <div style={{ padding: '24px', backgroundColor: '#fafafa' }}>
       {/* Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #fa8c16 0%, #d46b08 100%)',
-        color: 'white',
-        padding: '20px',
+      <div style={{ 
+        background: 'linear-gradient(135deg, #fa8c16 0%, #fa541c 100%)', 
+        color: 'white', 
+        padding: '20px', 
         borderRadius: '12px',
         marginBottom: 24,
         display: 'flex',
@@ -431,23 +452,34 @@ const AdvancePayments = () => {
           </div>
           <div>
             <Title level={2} style={{ margin: 0, color: 'white' }}>
-              Advance Payments Management
+              Advance Payments
             </Title>
             <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
-              Track and manage pottery advance payments & partial orders
+              Mitti Arts Pottery - Partial Payment Management
             </Text>
           </div>
         </div>
-        <div style={{ fontSize: '32px', opacity: 0.3 }}>🏺</div>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={loadAdvanceOrders}
+          loading={loading}
+          style={{ 
+            backgroundColor: 'rgba(255,255,255,0.2)', 
+            borderColor: 'rgba(255,255,255,0.3)',
+            color: 'white'
+          }}
+        >
+          Refresh
+        </Button>
       </div>
 
-      {/* Analytics Cards */}
+      {/* Summary Cards */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Pending Advances"
-              value={analytics.totalPending}
+              title="Pending Payments"
+              value={pendingOrders.length}
               prefix={<ClockCircleOutlined />}
               valueStyle={{ color: '#fa8c16' }}
             />
@@ -456,12 +488,11 @@ const AdvancePayments = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Pending Amount"
-              value={analytics.totalPendingAmount}
+              title="Amount Pending"
+              value={totalPendingAmount}
               prefix="₹"
-              precision={0}
-              valueStyle={{ color: '#ff4d4f' }}
-              formatter={(value) => `${(value / 1000).toFixed(1)}k`}
+              precision={2}
+              valueStyle={{ color: '#fa541c' }}
             />
           </Card>
         </Col>
@@ -469,131 +500,165 @@ const AdvancePayments = () => {
           <Card>
             <Statistic
               title="Advance Collected"
-              value={analytics.totalAdvanceCollected}
+              value={totalAdvanceCollected}
               prefix="₹"
-              precision={0}
+              precision={2}
               valueStyle={{ color: '#52c41a' }}
-              formatter={(value) => `${(value / 1000).toFixed(1)}k`}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Completed Orders"
-              value={analytics.totalCompleted}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#1890ff' }}
+              title="Overdue Orders"
+              value={overdueOrders.length}
+              prefix={<ExclamationCircleOutlined />}
+              valueStyle={{ color: '#f5222d' }}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* Main Content */}
-      <Card>
-        <Tabs activeKey={activeTab} onChange={setActiveTab} size="large">
-          <TabPane
-            tab={
-              <Badge count={analytics.totalPending} offset={[10, 0]}>
-                <span>
-                  <ClockCircleOutlined /> Pending Payments ({analytics.totalPending})
-                </span>
-              </Badge>
-            }
-            key="pending"
-          >
-            {pendingAdvances.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 60 }}>
-                <div style={{ fontSize: '48px', marginBottom: 16 }}>💰</div>
-                <Title level={4} type="secondary">No Pending Advance Payments</Title>
-                <Text type="secondary">
-                  All advance payments have been completed or no advance orders exist.
-                </Text>
-              </div>
-            ) : (
-              <Table
-                columns={pendingColumns}
-                dataSource={pendingAdvances}
-                rowKey="id"
-                loading={loading}
-                pagination={{
-                  pageSize: 10,
-                  showSizeChanger: true,
-                  showTotal: (total, range) =>
-                    `${range[0]}-${range[1]} of ${total} pending advance payments`
-                }}
-                scroll={{ x: 'max-content' }}
-              />
-            )}
-          </TabPane>
+      {/* Alerts */}
+      {overdueOrders.length > 0 && (
+        <Alert
+          message={`⚠️ ${overdueOrders.length} overdue payments requiring attention`}
+          description="Consider sending payment reminders to customers with overdue payments."
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button 
+              size="small" 
+              onClick={() => setFilters(prev => ({ ...prev, overdue: true }))}
+            >
+              View Overdue
+            </Button>
+          }
+        />
+      )}
 
-          <TabPane
-            tab={
-              <span>
-                <CheckCircleOutlined /> Completed ({analytics.totalCompleted})
-              </span>
-            }
-            key="completed"
-          >
-            <Table
-              columns={completedColumns}
-              dataSource={completedAdvances}
-              rowKey="id"
-              loading={loading}
-              pagination={{
-                pageSize: 10,
-                showTotal: (total, range) =>
-                  `${range[0]}-${range[1]} of ${total} completed advance payments`
-              }}
-              scroll={{ x: 'max-content' }}
+      {/* Filters */}
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={16} align="middle">
+          <Col xs={24} sm={8} md={4}>
+            <Select
+              value={filters.status}
+              onChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
+              style={{ width: '100%' }}
+            >
+              <Option value="all">All Status</Option>
+              <Option value="pending">Pending</Option>
+              <Option value="completed">Completed</Option>
+            </Select>
+          </Col>
+          <Col xs={24} sm={8} md={6}>
+            <RangePicker
+              value={filters.dateRange}
+              onChange={(dates) => setFilters(prev => ({ ...prev, dateRange: dates }))}
+              style={{ width: '100%' }}
             />
-          </TabPane>
-        </Tabs>
+          </Col>
+          <Col xs={24} sm={8} md={6}>
+            <Input.Search
+              placeholder="Search orders, customers..."
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              allowClear
+            />
+          </Col>
+          <Col xs={24} sm={8} md={4}>
+            <Button
+              type={filters.overdue ? 'primary' : 'default'}
+              danger={filters.overdue}
+              icon={<WarningOutlined />}
+              onClick={() => setFilters(prev => ({ ...prev, overdue: !prev.overdue }))}
+            >
+              {filters.overdue ? 'Show All' : 'Overdue Only'}
+            </Button>
+          </Col>
+          <Col xs={24} sm={8} md={4}>
+            <Text type="secondary">
+              {filteredOrders.length} orders
+            </Text>
+          </Col>
+        </Row>
       </Card>
 
-      {/* Payment Modal */}
+      {/* Orders Table */}
+      <Card>
+        <Table
+          columns={columns}
+          dataSource={filteredOrders}
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} advance payments`,
+          }}
+          scroll={{ x: 'max-content' }}
+          rowClassName={(record) => {
+            if (record.remainingAmount <= 0) return 'completed-row';
+            if (getDaysOverdue(record) > 0) return 'overdue-row';
+            return '';
+          }}
+          summary={(pageData) => {
+            const pagePending = pageData.reduce((sum, record) => sum + (record.remainingAmount || 0), 0);
+            const pageAdvance = pageData.reduce((sum, record) => sum + (record.advanceAmount || 0), 0);
+            
+            return (
+              <Table.Summary.Row style={{ backgroundColor: '#fafafa', fontWeight: 'bold' }}>
+                <Table.Summary.Cell index={0} colSpan={2}>
+                  <Text strong>Page Total:</Text>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={2}>
+                  <div>
+                    <div>Advance: ₹{pageAdvance.toFixed(2)}</div>
+                    <div style={{ color: '#fa541c' }}>Pending: ₹{pagePending.toFixed(2)}</div>
+                  </div>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={3} colSpan={3} />
+              </Table.Summary.Row>
+            );
+          }}
+        />
+      </Card>
+
+      {/* Payment Completion Modal */}
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <PayCircleOutlined style={{ color: '#fa8c16' }} />
+          <Space>
+            <PayCircleOutlined style={{ color: '#52c41a' }} />
             <span>Complete Advance Payment</span>
-          </div>
+          </Space>
         }
-        open={paymentModal}
-        onCancel={() => setPaymentModal(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setPaymentModal(false)}>
-            Cancel
-          </Button>,
-          <Button
-            key="process"
-            type="primary"
-            loading={processingPayment}
-            onClick={handleCompletePayment}
-            style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
-          >
-            Process Payment
-          </Button>
-        ]}
+        open={showPaymentModal}
+        onCancel={() => {
+          setShowPaymentModal(false);
+          setSelectedOrder(null);
+          paymentForm.resetFields();
+        }}
+        footer={null}
         width={600}
-        destroyOnClose
       >
-        {selectedAdvance && (
-          <>
+        {selectedOrder && (
+          <div>
             <Alert
-              message="Advance Payment Completion"
-              description={`Processing payment for order ${selectedAdvance.orderNumber}. Once payment is completed, a new invoice will be generated.`}
+              message="Payment Completion"
+              description={`Complete the remaining payment for order ${selectedOrder.orderNumber}`}
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
             />
-
-            <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f6ffed' }}>
+            
+            <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#f0f5ff', borderRadius: 6 }}>
               <Row gutter={16}>
                 <Col span={8}>
                   <Statistic
-                    title="Total Order Amount"
-                    value={selectedAdvance.total}
+                    title="Total Order"
+                    value={selectedOrder.total}
                     prefix="₹"
                     precision={2}
                   />
@@ -601,7 +666,7 @@ const AdvancePayments = () => {
                 <Col span={8}>
                   <Statistic
                     title="Already Paid"
-                    value={selectedAdvance.advanceAmount}
+                    value={selectedOrder.advanceAmount}
                     prefix="₹"
                     precision={2}
                     valueStyle={{ color: '#52c41a' }}
@@ -609,40 +674,49 @@ const AdvancePayments = () => {
                 </Col>
                 <Col span={8}>
                   <Statistic
-                    title="Remaining Balance"
-                    value={selectedAdvance.remainingAmount}
+                    title="Remaining"
+                    value={selectedOrder.remainingAmount}
                     prefix="₹"
                     precision={2}
                     valueStyle={{ color: '#fa541c' }}
                   />
                 </Col>
               </Row>
-            </Card>
+            </div>
 
-            <Form form={paymentForm} layout="vertical">
+            <Form
+              form={paymentForm}
+              layout="vertical"
+              onFinish={handleCompletePayment}
+            >
+              <Form.Item
+                name="paymentAmount"
+                label="Payment Amount"
+                rules={[
+                  { required: true, message: 'Please enter payment amount' },
+                  { type: 'number', min: 0.01, message: 'Amount must be greater than 0' },
+                  { 
+                    type: 'number', 
+                    max: selectedOrder.remainingAmount, 
+                    message: 'Amount cannot exceed remaining balance' 
+                  }
+                ]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  prefix="₹"
+                  min={0.01}
+                  max={selectedOrder.remainingAmount}
+                  step={0.01}
+                  placeholder="Enter payment amount"
+                />
+              </Form.Item>
+
               <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item
-                    label="Payment Amount"
-                    name="paymentAmount"
-                    rules={[
-                      { required: true, message: 'Please enter payment amount' },
-                      { type: 'number', min: 0.01, message: 'Amount must be greater than 0' }
-                    ]}
-                  >
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      prefix="₹"
-                      max={selectedAdvance.remainingAmount}
-                      precision={2}
-                      placeholder="Enter payment amount"
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    label="Payment Method"
                     name="paymentMethod"
+                    label="Payment Method"
                     rules={[{ required: true, message: 'Please select payment method' }]}
                   >
                     <Select placeholder="Select payment method">
@@ -654,138 +728,137 @@ const AdvancePayments = () => {
                     </Select>
                   </Form.Item>
                 </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="bank"
+                    label="Bank (if not Cash)"
+                  >
+                    <Select placeholder="Select bank" allowClear>
+                      {bankOptions.map(bank => (
+                        <Option key={bank} value={bank}>{bank}</Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
               </Row>
 
               <Form.Item
-                noStyle
-                shouldUpdate={(prevValues, currentValues) =>
-                  prevValues.paymentMethod !== currentValues.paymentMethod
-                }
-              >
-                {({ getFieldValue }) => {
-                  const paymentMethod = getFieldValue('paymentMethod');
-                  return paymentMethod && paymentMethod !== 'Cash' ? (
-                    <Form.Item
-                      label="Bank/Payment Details"
-                      name="bankDetails"
-                      rules={[{ required: true, message: 'Please select bank details' }]}
-                    >
-                      <Select placeholder="Select bank/payment details">
-                        {bankOptions.map(bank => (
-                          <Option key={bank} value={bank}>{bank}</Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                  ) : null;
-                }}
-              </Form.Item>
-
-              <Form.Item
-                label="Notes (Optional)"
                 name="notes"
+                label="Notes (Optional)"
               >
-                <Input.TextArea
+                <TextArea
                   rows={3}
-                  placeholder="Any additional notes about this payment..."
+                  placeholder="Any additional notes about the payment..."
                 />
               </Form.Item>
+
+              <div style={{ textAlign: 'right' }}>
+                <Space>
+                  <Button onClick={() => {
+                    setShowPaymentModal(false);
+                    setSelectedOrder(null);
+                    paymentForm.resetFields();
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={loading || smsLoading}
+                    icon={<CheckCircleOutlined />}
+                  >
+                    Complete Payment
+                  </Button>
+                </Space>
+              </div>
             </Form>
-          </>
-        )}
-      </Modal>
-
-      {/* Details Modal */}
-      <Modal
-        title="Advance Payment Details"
-        open={detailsModal}
-        onCancel={() => setDetailsModal(false)}
-        footer={[
-          <Button key="close" onClick={() => setDetailsModal(false)}>
-            Close
-          </Button>
-        ]}
-        width={700}
-      >
-        {selectedAdvance && (
-          <div>
-            <Descriptions column={2} bordered size="small">
-              <Descriptions.Item label="Order Number">
-                {selectedAdvance.orderNumber}
-              </Descriptions.Item>
-              <Descriptions.Item label="Customer">
-                {selectedAdvance.customer?.name || 'Walk-in Customer'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Order Date">
-                {moment(selectedAdvance.createdAt?.toDate?.() || selectedAdvance.createdAt).format('DD MMMM YYYY')}
-              </Descriptions.Item>
-              <Descriptions.Item label="Business Type">
-                <Tag color={selectedAdvance.businessType === 'wholesale' ? 'orange' : 'blue'}>
-                  {selectedAdvance.businessType === 'wholesale' ? 'Wholesale' : 'Retail'}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Branch">
-                {selectedAdvance.branchInfo?.name || 'Unknown Branch'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Payment Status">
-                <Tag color={selectedAdvance.remainingAmount > 0 ? 'orange' : 'green'}>
-                  {selectedAdvance.remainingAmount > 0 ? 'Partial Payment' : 'Fully Paid'}
-                </Tag>
-              </Descriptions.Item>
-            </Descriptions>
-
-            <Divider orientation="left">Payment Breakdown</Divider>
-            <Row gutter={16}>
-              <Col span={8}>
-                <Card size="small">
-                  <Statistic
-                    title="Total Order Amount"
-                    value={selectedAdvance.total}
-                    prefix="₹"
-                    precision={2}
-                  />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card size="small" style={{ borderColor: '#52c41a' }}>
-                  <Statistic
-                    title="Advance Paid"
-                    value={selectedAdvance.advanceAmount}
-                    prefix="₹"
-                    precision={2}
-                    valueStyle={{ color: '#52c41a' }}
-                  />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card size="small" style={{ borderColor: '#fa541c' }}>
-                  <Statistic
-                    title="Remaining Balance"
-                    value={selectedAdvance.remainingAmount}
-                    prefix="₹"
-                    precision={2}
-                    valueStyle={{ color: '#fa541c' }}
-                  />
-                </Card>
-              </Col>
-            </Row>
-
-            <Divider orientation="left">Order Items</Divider>
-            <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-              {selectedAdvance.items?.map((item, index) => (
-                <div key={index} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px',
-                  borderBottom: '1px solid #f0f0f0'
-                }}>
-                  <span>{item.product?.name} × {item.quantity}</span>
-                  <span>₹{(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </Modal>
+
+      {/* SMS Reminder Modal */}
+      <Modal
+        title={
+          <Space>
+            <MessageOutlined style={{ color: '#fa8c16' }} />
+            <span>Send Payment Reminder</span>
+          </Space>
+        }
+        open={showReminderModal}
+        onCancel={() => {
+          setShowReminderModal(false);
+          setSelectedOrder(null);
+          reminderForm.resetFields();
+        }}
+        footer={null}
+        width={500}
+      >
+        {selectedOrder && (
+          <div>
+            <Alert
+              message="SMS Reminder"
+              description={`Send payment reminder to ${selectedOrder.customer?.name} (${selectedOrder.customer?.phone})`}
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+
+            <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#fff7e6', borderRadius: 6 }}>
+              <Text strong>Order: </Text>{selectedOrder.orderNumber}<br />
+              <Text strong>Remaining: </Text>₹{selectedOrder.remainingAmount?.toFixed(2)}<br />
+              <Text strong>Days Overdue: </Text>{getDaysOverdue(selectedOrder)} days
+            </div>
+
+            <Form
+              form={reminderForm}
+              layout="vertical"
+              onFinish={handleSendReminder}
+            >
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <Text type="secondary">
+                  A polite reminder SMS will be sent to the customer about their pending payment.
+                </Text>
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                <Space>
+                  <Button onClick={() => {
+                    setShowReminderModal(false);
+                    setSelectedOrder(null);
+                    reminderForm.resetFields();
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={smsLoading}
+                    icon={<SendOutlined />}
+                    style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
+                  >
+                    Send Reminder
+                  </Button>
+                </Space>
+              </div>
+            </Form>
+          </div>
+        )}
+      </Modal>
+
+      <style jsx>{`
+        .completed-row {
+          background-color: #f6ffed !important;
+        }
+        .overdue-row {
+          background-color: #fff2f0 !important;
+        }
+        .completed-row:hover {
+          background-color: #d9f7be !important;
+        }
+        .overdue-row:hover {
+          background-color: #ffccc7 !important;
+        }
+      `}</style>
     </div>
   );
 };

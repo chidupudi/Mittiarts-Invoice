@@ -19,22 +19,34 @@ import { auth, db } from '../firebase/config';
 
 class FirebaseService {
   // Helper to convert Firestore document to plain object
-  convertDocToPlainObject(docData) {
-    const plainObject = { ...docData };
+// Replace your existing convertDocToPlainObject method with this:
+
+convertDocToPlainObject(docData) {
+  const plainObject = { ...docData };
+  
+  // Convert ALL Timestamp fields to ISO strings (including nested ones)
+  Object.keys(plainObject).forEach(key => {
+    const value = plainObject[key];
     
-    // Convert all Timestamp fields to ISO strings
-    Object.keys(plainObject).forEach(key => {
-      if (plainObject[key] instanceof Timestamp) {
-        plainObject[key] = plainObject[key].toDate().toISOString();
-      } else if (plainObject[key]?.toDate && typeof plainObject[key].toDate === 'function') {
-        plainObject[key] = plainObject[key].toDate().toISOString();
-      } else if (plainObject[key] instanceof Date) {
-        plainObject[key] = plainObject[key].toISOString();
-      }
-    });
-    
-    return plainObject;
-  }
+    if (value instanceof Timestamp) {
+      plainObject[key] = value.toDate().toISOString();
+    } else if (value?.toDate && typeof value.toDate === 'function') {
+      plainObject[key] = value.toDate().toISOString();
+    } else if (value instanceof Date) {
+      plainObject[key] = value.toISOString();
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // 🔥 THIS IS THE KEY FIX: Recursively convert nested objects
+      plainObject[key] = this.convertDocToPlainObject(value);
+    } else if (Array.isArray(value)) {
+      // Convert arrays that might contain Timestamps
+      plainObject[key] = value.map(item => 
+        (item && typeof item === 'object') ? this.convertDocToPlainObject(item) : item
+      );
+    }
+  });
+  
+  return plainObject;
+}
 
   // Generic CRUD operations
   async create(collectionName, data) {
