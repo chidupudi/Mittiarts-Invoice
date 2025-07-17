@@ -1,4 +1,4 @@
-// api/send-sms.js - Corrected Fast2SMS Implementation
+// api/send-sms.js - Simplified Fast2SMS Implementation for Mitti Arts
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,7 +17,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('📱 Fast2SMS Request received:', req.body);
+    console.log('📱 Fast2SMS Request received:', {
+      bodyKeys: Object.keys(req.body || {}),
+      timestamp: new Date().toISOString()
+    });
 
     const { phoneNumber, customerName, orderNumber, billToken, totalAmount } = req.body;
 
@@ -67,6 +70,7 @@ Contact: 9441550927
 - Mitti Arts Team`;
 
     console.log('📝 Message length:', message.length, 'characters');
+    console.log('📞 Target number:', `${cleanNumber.slice(0, 5)}*****`);
 
     // Validate message length
     if (message.length > 1000) {
@@ -77,22 +81,21 @@ Contact: 9441550927
       });
     }
 
-    // Fast2SMS API Configuration (Official Documentation)
+    // Fast2SMS API Configuration
     const API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
     const API_URL = 'https://www.fast2sms.com/dev/bulkV2';
 
-    // Prepare POST request payload (as per official docs)
+    // Prepare POST request payload
     const payload = {
       message: message,
-      route: 'q',  // Quick SMS route (no DLT required, ₹5.00 per SMS)
+      route: 'q',  // Quick SMS route
       numbers: cleanNumber,
       flash: '0'
     };
 
     console.log('📡 Calling Fast2SMS API...');
-    console.log('📞 Target number:', `${cleanNumber.slice(0, 5)}*****`);
 
-    // Send SMS via Fast2SMS API (POST method as per documentation)
+    // Send SMS via Fast2SMS API
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
@@ -112,7 +115,7 @@ Contact: 9441550927
     const data = await response.json();
     console.log('📊 Fast2SMS Response Data:', data);
 
-    // Handle Fast2SMS response (as per official documentation)
+    // Handle Fast2SMS response
     if (data.return === true) {
       console.log('✅ SMS sent successfully via Fast2SMS');
       
@@ -122,34 +125,30 @@ Contact: 9441550927
         message: 'SMS sent successfully',
         provider: 'Fast2SMS',
         route: 'Quick SMS',
-        cost: '₹5.00 per SMS',
+        cost: '₹0.25 per SMS',
         sentAt: new Date().toISOString(),
         phoneNumber: `+91${cleanNumber}`,
+        billLink: billLink,
         
         // Additional response data
         fast2smsData: {
           requestId: data.request_id,
-          returnStatus: data.return,
-          messagesSent: data.request_id ? 1 : 0
+          returnStatus: data.return
         }
       });
     } else {
       // Handle Fast2SMS error response
-      // According to docs, 'message' field can be an array of error messages
       let errorMsg = 'Unknown Fast2SMS API error';
       
       if (data.message) {
         if (Array.isArray(data.message)) {
-          // If message is an array, join all error messages
           errorMsg = data.message.join(', ');
         } else {
-          // If message is a string
           errorMsg = data.message;
         }
       }
       
       console.error('❌ Fast2SMS Error:', errorMsg);
-      console.error('❌ Full Fast2SMS Response:', data);
       
       return res.status(422).json({
         success: false,
@@ -157,25 +156,7 @@ Contact: 9441550927
         provider: 'Fast2SMS',
         attemptedAt: new Date().toISOString(),
         phoneNumber: `+91${cleanNumber}`,
-        fast2smsResponse: data,
-        
-        troubleshooting: {
-          possibleCauses: [
-            'Invalid or expired API key',
-            'Insufficient Fast2SMS account balance',
-            'Invalid phone number format',
-            'Message content blocked or too long',
-            'API rate limits exceeded'
-          ],
-          solutions: [
-            'Check Fast2SMS account balance',
-            'Verify API key is correct and active',
-            'Ensure phone number is valid Indian mobile',
-            'Check message content for prohibited words'
-          ],
-          documentation: 'https://docs.fast2sms.com/',
-          dashboard: 'https://www.fast2sms.com/dashboard'
-        }
+        fast2smsResponse: data
       });
     }
 
@@ -209,23 +190,7 @@ Contact: 9441550927
       error: errorMessage,
       errorCode: errorCode,
       provider: 'Fast2SMS',
-      attemptedAt: new Date().toISOString(),
-      
-      // Debug information (only in development)
-      ...(process.env.NODE_ENV === 'development' && {
-        debug: {
-          originalError: error.message,
-          stack: error.stack,
-          requestBody: req.body
-        }
-      }),
-      
-      // Helpful troubleshooting information
-      troubleshooting: {
-        contact: 'Check Fast2SMS support or account dashboard',
-        documentation: 'https://docs.fast2sms.com/',
-        dashboard: 'https://www.fast2sms.com/dashboard'
-      }
+      attemptedAt: new Date().toISOString()
     });
   }
 }

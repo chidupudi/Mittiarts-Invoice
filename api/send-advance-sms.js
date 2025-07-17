@@ -1,38 +1,28 @@
-// api/send-advance-sms.js - Corrected Fast2SMS Implementation for Advance Payments
+// api/send-advance-sms.js - Simplified Fast2SMS Implementation for Advance Payments
 export default async function handler(req, res) {
-  // Set CORS headers for all responses
+  // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
-  // Only allow POST method
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed. Use POST.',
-      allowedMethods: ['POST'],
+      error: 'Method not allowed. Use POST method.',
       smsType: 'advance'
     });
   }
 
   try {
     console.log('📱 Fast2SMS Advance Payment SMS Request:', {
-      method: req.method,
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
 
-    // Fast2SMS API Configuration (Official)
-    const FAST2SMS_API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
-    const FAST2SMS_URL = 'https://www.fast2sms.com/dev/bulkV2';
-
-    // Extract and validate request data
     const { 
       phoneNumber, 
       customerName, 
@@ -43,29 +33,10 @@ export default async function handler(req, res) {
     } = req.body;
 
     // Validate required fields
-    if (!phoneNumber) {
+    if (!phoneNumber || !customerName || !orderNumber) {
       return res.status(400).json({
         success: false,
-        error: 'Phone number is required',
-        field: 'phoneNumber',
-        smsType: 'advance'
-      });
-    }
-
-    if (!customerName || customerName.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Customer name is required',
-        field: 'customerName',
-        smsType: 'advance'
-      });
-    }
-
-    if (!orderNumber || orderNumber.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Order number is required',
-        field: 'orderNumber',
+        error: 'Missing required fields: phoneNumber, customerName, orderNumber',
         smsType: 'advance'
       });
     }
@@ -74,7 +45,6 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'Valid advance amount is required',
-        field: 'advanceAmount',
         smsType: 'advance'
       });
     }
@@ -83,21 +53,17 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'Valid remaining amount is required',
-        field: 'remainingAmount',
         smsType: 'advance'
       });
     }
 
-    // Clean and validate Indian phone number
+    // Clean and validate phone number
     const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
-    const formattedNumber = `+91${cleanNumber}`;
     
-    // Validate Indian mobile number format (10 digits starting with 6, 7, 8, or 9)
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.',
-        phoneNumber: cleanNumber,
         smsType: 'advance'
       });
     }
@@ -106,15 +72,7 @@ export default async function handler(req, res) {
     const advance = Number(advanceAmount);
     const remaining = Number(remainingAmount);
     
-    if (advance < 0 || remaining < 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Amounts cannot be negative',
-        smsType: 'advance'
-      });
-    }
-
-    if (advance === 0) {
+    if (advance <= 0) {
       return res.status(400).json({
         success: false,
         error: 'Advance amount must be greater than zero',
@@ -131,16 +89,11 @@ export default async function handler(req, res) {
     }
     origin = origin.replace(/\/$/, '');
     
-    // Ensure we're using the correct domain
-    if (!origin.includes('mittiarts.com') && !origin.includes('localhost') && !origin.includes('vercel.app')) {
-      origin = 'https://invoice.mittiarts.com';
-    }
-
     const billLink = billToken && billToken !== 'none' 
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create advance payment SMS message for Mitti Arts
+    // Create advance payment SMS message
     const message = `Dear ${customerName.trim()},
 
 🏺 Advance payment received for Mitti Arts!
@@ -161,62 +114,66 @@ Contact: 9441550927
     console.log('📝 Message length:', message.length, 'characters');
     console.log('💰 Advance:', advance, 'Remaining:', remaining);
 
-    // Validate message length (Fast2SMS limit)
+    // Validate message length
     if (message.length > 1000) {
       return res.status(400).json({
         success: false,
         error: 'Message too long. Please reduce to under 1000 characters.',
         messageLength: message.length,
-        maxLength: 1000,
         smsType: 'advance'
       });
     }
 
-    // Prepare Fast2SMS API payload (POST method as per official docs)
+    // Fast2SMS API Configuration
+    const API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
+    const API_URL = 'https://www.fast2sms.com/dev/bulkV2';
+
+    // Prepare POST request payload
     const payload = {
       message: message,
-      route: 'q', // Quick route (no DLT required)
+      route: 'q', // Quick route
       numbers: cleanNumber,
       flash: '0'
     };
 
-    // Send SMS via Fast2SMS API (POST method)
     console.log('📡 Calling Fast2SMS API for advance payment...');
-    const fast2smsResponse = await fetch(FAST2SMS_URL, {
+
+    // Send SMS via Fast2SMS API
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
-        'authorization': FAST2SMS_API_KEY,
+        'authorization': API_KEY,
         'Content-Type': 'application/json',
         'cache-control': 'no-cache'
       },
       body: JSON.stringify(payload)
     });
 
-    console.log('📊 Fast2SMS Response Status:', fast2smsResponse.status);
+    console.log('📊 Fast2SMS Response Status:', response.status);
 
-    if (!fast2smsResponse.ok) {
-      throw new Error(`Fast2SMS API returned status ${fast2smsResponse.status}`);
+    if (!response.ok) {
+      throw new Error(`Fast2SMS API returned status ${response.status}`);
     }
 
-    const fast2smsData = await fast2smsResponse.json();
-    console.log('📊 Fast2SMS Response Data:', fast2smsData);
+    const data = await response.json();
+    console.log('📊 Fast2SMS Response Data:', data);
 
     // Handle successful Fast2SMS response
-    if (fast2smsData.return === true) {
+    if (data.return === true) {
       console.log('✅ Advance payment SMS sent successfully via Fast2SMS');
       
       return res.status(200).json({
         success: true,
-        messageId: fast2smsData.request_id,
-        message: message,
+        messageId: data.request_id,
+        message: 'Advance payment SMS sent successfully',
         smsType: 'advance',
         billToken: billToken || null,
         billLink: billLink,
         provider: 'Fast2SMS',
         route: 'Quick SMS',
         sentAt: new Date().toISOString(),
-        phoneNumber: formattedNumber,
-        cost: 'Rs.5.00 per SMS',
+        phoneNumber: `+91${cleanNumber}`,
+        cost: '₹0.25 per SMS',
         
         // Advance payment specific data
         paymentDetails: {
@@ -228,27 +185,23 @@ Contact: 9441550927
         
         // Additional Fast2SMS response data
         fast2smsData: {
-          requestId: fast2smsData.request_id,
-          returnStatus: fast2smsData.return,
-          messagesSent: fast2smsData.request_id ? 1 : 0
+          requestId: data.request_id,
+          returnStatus: data.return
         }
       });
     } else {
-      // Fast2SMS returned error - FIXED: Proper error message handling
+      // Fast2SMS returned error
       let errorMsg = 'Unknown Fast2SMS API error';
       
-      if (fast2smsData.message) {
-        if (Array.isArray(fast2smsData.message)) {
-          // If message is an array, join all error messages
-          errorMsg = fast2smsData.message.join(', ');
+      if (data.message) {
+        if (Array.isArray(data.message)) {
+          errorMsg = data.message.join(', ');
         } else {
-          // If message is a string
-          errorMsg = fast2smsData.message;
+          errorMsg = data.message;
         }
       }
       
       console.error('❌ Fast2SMS Advance SMS Error:', errorMsg);
-      console.error('❌ Full Fast2SMS Response:', fast2smsData);
       
       return res.status(422).json({
         success: false,
@@ -256,32 +209,13 @@ Contact: 9441550927
         smsType: 'advance',
         provider: 'Fast2SMS',
         attemptedAt: new Date().toISOString(),
-        phoneNumber: formattedNumber,
-        fast2smsResponse: fast2smsData,
+        phoneNumber: `+91${cleanNumber}`,
+        fast2smsResponse: data,
         
-        // Payment context for debugging
         paymentContext: {
           advanceAmount: advance,
           remainingAmount: remaining,
           orderNumber: orderNumber.trim()
-        },
-        
-        troubleshooting: {
-          possibleCauses: [
-            'Invalid or expired API key',
-            'Insufficient Fast2SMS account balance',
-            'Invalid phone number format',
-            'Message content blocked',
-            'API rate limits exceeded'
-          ],
-          solutions: [
-            'Check Fast2SMS account balance',
-            'Verify API key is correct and active',
-            'Check phone number format',
-            'Review message content for prohibited words'
-          ],
-          checkBalance: 'https://www.fast2sms.com/dashboard',
-          documentation: 'https://docs.fast2sms.com'
         }
       });
     }
@@ -295,14 +229,14 @@ Contact: 9441550927
     let errorCode = 'UNKNOWN';
     
     if (error.message?.includes('fetch')) {
-      errorMessage = 'Failed to connect to Fast2SMS. Please check your internet connection.';
+      errorMessage = 'Failed to connect to Fast2SMS. Please check internet connection.';
       statusCode = 503;
       errorCode = 'NETWORK_ERROR';
     } else if (error.message?.includes('timeout')) {
       errorMessage = 'SMS request timed out. Please try again.';
       statusCode = 504;
       errorCode = 'TIMEOUT';
-    } else if (error.message?.includes('authorization') || error.message?.includes('auth')) {
+    } else if (error.message?.includes('authorization')) {
       errorMessage = 'Fast2SMS authentication failed. Please check API key.';
       statusCode = 401;
       errorCode = 'AUTH_ERROR';
@@ -318,29 +252,11 @@ Contact: 9441550927
       smsType: 'advance',
       provider: 'Fast2SMS',
       attemptedAt: new Date().toISOString(),
-      phoneNumber: formattedNumber || cleanNumber || 'Invalid',
       
-      // Payment context for debugging
       paymentContext: {
         advanceAmount: req.body.advanceAmount,
         remainingAmount: req.body.remainingAmount,
         orderNumber: req.body.orderNumber
-      },
-      
-      // Debug information (only in development)
-      ...(process.env.NODE_ENV === 'development' && {
-        debug: {
-          originalError: error.message,
-          stack: error.stack,
-          requestBody: req.body
-        }
-      }),
-      
-      // Helpful troubleshooting information
-      troubleshooting: {
-        apiStatus: 'https://www.fast2sms.com/dashboard',
-        documentation: 'https://docs.fast2sms.com',
-        support: 'Check Fast2SMS balance and API key validity'
       }
     });
   }

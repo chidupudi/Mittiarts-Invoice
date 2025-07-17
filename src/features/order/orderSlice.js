@@ -314,31 +314,22 @@ export const createOrder = createAsyncThunk(
         // Don't fail the order creation if invoice creation fails
       }
 
-      // 🆕 UPDATED: Send SMS after successful invoice creation with better error handling
-      let customerPhone = null; // Declare outside try block to avoid scope issues
-
+      // 🆕 SIMPLIFIED SMS INTEGRATION
       try {
-        // Only send SMS if customer has a valid phone number
-        customerPhone = customer?.phone || customer?.phone1 || customer?.phone2;
+        const customerPhone = customer?.phone;
+        const customerName = customer?.name || 'Valued Customer';
 
         if (customerPhone && smsService.isValidPhoneNumber(customerPhone)) {
-          const customerName = customer?.name || 'Valued Customer';
+          console.log('📱 Sending SMS to customer...');
 
           // Generate bill token for secure sharing
           const billToken = smsService.generateBillToken();
 
-          // Store bill token in order FIRST (before attempting SMS)
+          // Store bill token in order
           await firebaseService.update('orders', order.id, {
             billToken: billToken,
-            billTokenCreatedAt: new Date(),
-            smsDelivery: {
-              status: 'pending',
-              attemptedAt: new Date(),
-              phoneNumber: smsService.cleanPhoneNumber(customerPhone)
-            }
+            billTokenCreatedAt: new Date()
           });
-
-          console.log('🔗 Bill token generated and stored:', billToken);
 
           let smsResult;
 
@@ -363,7 +354,7 @@ export const createOrder = createAsyncThunk(
             );
           }
 
-          // Update order based on SMS result
+          // Update order with SMS status
           if (smsResult && smsResult.success) {
             console.log('✅ SMS sent successfully:', smsResult.messageId);
             await firebaseService.update('orders', order.id, {
@@ -372,61 +363,46 @@ export const createOrder = createAsyncThunk(
                 messageId: smsResult.messageId,
                 sentAt: new Date(),
                 phoneNumber: smsService.cleanPhoneNumber(customerPhone),
-                message: smsResult.message || 'SMS sent successfully',
                 provider: smsResult.provider || 'Fast2SMS',
-                billToken: billToken,
-                billLink: smsResult.billLink
+                billToken: billToken
               }
             });
           } else {
-            console.warn('⚠️ SMS sending failed:', smsResult?.error || 'Unknown SMS error');
+            console.warn('⚠️ SMS sending failed:', smsResult?.error);
             await firebaseService.update('orders', order.id, {
               smsDelivery: {
                 status: 'failed',
                 error: smsResult?.error || 'SMS sending failed',
                 failedAt: new Date(),
                 phoneNumber: smsService.cleanPhoneNumber(customerPhone),
-                provider: 'Fast2SMS',
-                billToken: billToken,
-                retryable: smsResult?.retryable !== false
+                billToken: billToken
               }
             });
-
-            // Don't fail the order creation, just log the SMS failure
-            console.warn('⚠️ Order created successfully but SMS failed. Customer can still access invoice via other means.');
           }
         } else {
           console.log('📝 No valid phone number for SMS:', customerPhone);
-          // Update order to indicate no SMS was sent
           await firebaseService.update('orders', order.id, {
             smsDelivery: {
               status: 'skipped',
               reason: customerPhone ? 'Invalid phone number format' : 'No phone number provided',
-              attemptedAt: new Date(),
-              phoneNumber: customerPhone || 'N/A'
+              attemptedAt: new Date()
             }
           });
         }
       } catch (smsError) {
-        console.error('💥 SMS service error (non-critical):', smsError);
-        // Don't fail the order creation if SMS fails - this is critical for business continuity
+        console.error('❌ SMS service error (non-critical):', smsError);
+        // Don't fail order creation if SMS fails
         try {
           await firebaseService.update('orders', order.id, {
             smsDelivery: {
               status: 'error',
               error: smsError.message || 'SMS service unavailable',
-              errorAt: new Date(),
-              phoneNumber: customerPhone || 'N/A', // Now customerPhone is in scope
-              stackTrace: process.env.NODE_ENV === 'development' ? smsError.stack : undefined
+              errorAt: new Date()
             }
           });
         } catch (updateError) {
           console.error('Failed to update SMS error status:', updateError);
-          // Even if we can't update the SMS status, continue with order creation
         }
-
-        // Continue with order creation - SMS failure should never block business operations
-        console.log('⚠️ Order created successfully but SMS service failed. Invoice is still accessible via direct links.');
       }
 
       // Update product stock for non-dynamic products
@@ -523,7 +499,7 @@ export const getOrder = createAsyncThunk(
   }
 );
 
-// [NEW & ENHANCED] Complete advance payment with new invoice generation
+// [NEW & ENHANCED] Complete advance payment with new invoice generation and SMS
 export const completeAdvancePayment = createAsyncThunk(
   'orders/completeAdvance',
   async ({ orderId, paymentAmount, paymentMethod, bankDetails, notes }, { rejectWithValue, dispatch }) => {
@@ -548,7 +524,7 @@ export const completeAdvancePayment = createAsyncThunk(
       if (paymentAmount > order.remainingAmount) {
         throw new Error('Payment amount exceeds remaining balance');
       }
-
+      
       if (paymentAmount <= 0) {
         throw new Error('Payment amount must be greater than 0');
       }
@@ -628,7 +604,6 @@ export const completeAdvancePayment = createAsyncThunk(
           console.log('Completion invoice generated successfully');
         } catch (invoiceError) {
           console.error('Failed to create completion invoice:', invoiceError);
-          // Don't fail the payment if invoice creation fails
         }
 
         // Create advance payment completion record
@@ -654,6 +629,44 @@ export const completeAdvancePayment = createAsyncThunk(
 
       // Update the original order
       const updatedOrder = await firebaseService.update('orders', orderId, orderUpdate);
+      
+      // 🆕 SEND COMPLETION SMS IF FULLY PAID
+      if (isFullyPaid) {
+        try {
+          // Get customer data
+          let customer = null;
+          if (order.customerId) {
+            try {
+              customer = await firebaseService.getById('customers', order.customerId);
+            } catch (error) {
+              console.warn('Could not fetch customer for completion SMS:', error);
+            }
+          }
+
+          const customerPhone = customer?.phone;
+          const customerName = customer?.name || 'Valued Customer';
+
+          if (customerPhone && smsService.isValidPhoneNumber(customerPhone)) {
+            console.log('📱 Sending payment completion SMS...');
+
+            const smsResult = await smsService.sendPaymentCompletionSMS(
+              customerPhone,
+              customerName,
+              order.orderNumber,
+              paymentAmount,
+              order.billToken 
+            );
+
+            if (smsResult && smsResult.success) {
+              console.log('✅ Completion SMS sent successfully:', smsResult.messageId);
+            } else {
+              console.warn('⚠️ Completion SMS failed:', smsResult?.error);
+            }
+          }
+        } catch (smsError) {
+          console.error('❌ Completion SMS error (non-critical):', smsError);
+        }
+      }
 
       // Enrich the order with customer data for return
       if (order.customerId) {
