@@ -1,4 +1,4 @@
-// api/status.js - Fast2SMS API Health Check and Status Monitor for Mitti Arts
+// api/status.js - Zoko WhatsApp API Health Check and Status Monitor for Mitti Arts
 export default async function handler(req, res) {
   // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,66 +24,69 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    console.log('🔍 Fast2SMS API Status Check Requested:', {
+    console.log('🔍 Zoko WhatsApp API Status Check Requested:', {
       method: req.method,
       timestamp: new Date().toISOString(),
       userAgent: req.headers['user-agent'] || 'Unknown'
     });
 
-    // Fast2SMS API Configuration
-    const FAST2SMS_API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
-    const FAST2SMS_ROUTE = 'q'; // Quick route (non-DLT)
-    const FAST2SMS_URL = 'https://www.fast2sms.com/dev/bulkV2';
+    // Zoko WhatsApp API Configuration
+    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
+    const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
+    const ZOKO_STATUS_URL = 'https://api.zoko.io/v2/account/profile'; // For checking account status
 
     // Basic health check data
     const healthCheck = {
-      service: 'Mitti Arts SMS API (Powered by Fast2SMS)',
+      service: 'Mitti Arts WhatsApp Messaging (Powered by Zoko)',
       status: 'operational',
       timestamp: new Date().toISOString(),
       uptime: process.uptime ? `${Math.floor(process.uptime())} seconds` : 'unknown',
       version: '2.0.0',
       environment: process.env.NODE_ENV || 'production',
-      provider: 'Fast2SMS',
+      provider: 'Zoko WhatsApp API',
       region: 'India',
-      businessType: 'Pottery & Handicrafts'
+      businessType: 'Pottery & Handicrafts',
+      channel: 'WhatsApp Business'
     };
 
     // API Configuration Status
     const configuration = {
-      fast2smsConfigured: !!FAST2SMS_API_KEY,
-      apiKey: FAST2SMS_API_KEY ? 
-        `${FAST2SMS_API_KEY.substring(0, 8)}...${FAST2SMS_API_KEY.substring(FAST2SMS_API_KEY.length - 4)}` : 
+      zokoConfigured: !!ZOKO_API_KEY,
+      apiKey: ZOKO_API_KEY ? 
+        `${ZOKO_API_KEY.substring(0, 8)}...${ZOKO_API_KEY.substring(ZOKO_API_KEY.length - 4)}` : 
         'Not configured',
-      route: FAST2SMS_ROUTE,
-      routeType: 'Quick Route (Non-DLT)',
-      apiUrl: FAST2SMS_URL,
-      supportedCountries: ['India'],
-      phoneNumberFormat: 'Indian 10-digit mobile numbers (6-9 starting)',
+      apiUrl: ZOKO_API_URL,
+      channel: 'WhatsApp Business',
+      supportedCountries: ['India', 'Global'],
+      phoneNumberFormat: 'International format (91XXXXXXXXXX for India)',
       
-      // Available SMS endpoints
+      // Available WhatsApp endpoints
       endpoints: {
         'send-sms': {
           path: '/api/send-sms',
           method: 'POST',
-          description: 'Send regular invoice/bill SMS via Fast2SMS',
-          status: 'active'
+          description: 'Send regular invoice/bill WhatsApp messages via Zoko',
+          status: 'active',
+          messageType: 'text'
         },
         'send-advance-sms': {
           path: '/api/send-advance-sms', 
           method: 'POST',
-          description: 'Send advance payment notification SMS via Fast2SMS',
-          status: 'active'
+          description: 'Send advance payment notification WhatsApp messages via Zoko',
+          status: 'active',
+          messageType: 'text'
         },
         'send-completion-sms': {
           path: '/api/send-completion-sms',
           method: 'POST', 
-          description: 'Send payment completion SMS via Fast2SMS',
-          status: 'active'
+          description: 'Send payment completion WhatsApp messages via Zoko',
+          status: 'active',
+          messageType: 'text'
         },
         'status': {
           path: '/api/status',
           method: 'GET',
-          description: 'API health check and Fast2SMS status monitoring',
+          description: 'API health check and Zoko WhatsApp status monitoring',
           status: 'active'
         }
       }
@@ -126,56 +129,54 @@ export default async function handler(req, res) {
       protocol: req.headers['x-forwarded-proto'] || 'unknown'
     };
 
-    // Fast2SMS Service Status Check (optional connectivity test)
-    let fast2smsStatus = {
+    // Zoko Service Status Check (optional connectivity test)
+    let zokoStatus = {
       reachable: 'unknown',
       message: 'Service status not tested in basic health check'
     };
 
-    // If query parameter ?testConnection=true is provided, test Fast2SMS connectivity
+    // If query parameter ?testConnection=true is provided, test Zoko connectivity
     if (req.query?.testConnection === 'true') {
       try {
-        console.log('🧪 Testing Fast2SMS connectivity...');
+        console.log('🧪 Testing Zoko WhatsApp API connectivity...');
         
-        // Test with a dummy number that won't actually send SMS
-        const testParams = new URLSearchParams({
-          authorization: FAST2SMS_API_KEY,
-          message: 'Test connectivity - ignore',
-          route: FAST2SMS_ROUTE,
-          numbers: '9999999999', // Test number
-          flash: '0'
-        });
-
-        const testResponse = await fetch(`${FAST2SMS_URL}?${testParams.toString()}`, {
+        // Test account profile endpoint (safer than sending a message)
+        const testResponse = await fetch(ZOKO_STATUS_URL, {
           method: 'GET',
           headers: {
-            'cache-control': 'no-cache',
+            'Authorization': `Bearer ${ZOKO_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
             'User-Agent': 'Mitti-Arts-POS-Health-Check/1.0'
           }
         });
 
         if (testResponse.ok) {
           const testData = await testResponse.json();
-          fast2smsStatus = {
+          zokoStatus = {
             reachable: true,
-            status: testData.return ? 'api_responding' : 'api_error',
-            message: testData.return ? 'Fast2SMS API is responding' : 'Fast2SMS API returned error',
+            status: 'api_responding',
+            message: 'Zoko WhatsApp API is responding',
             responseTime: `${Date.now() - startTime}ms`,
-            testData: testData
+            accountInfo: {
+              accountId: testData.id || 'available',
+              businessName: testData.business_name || 'Mitti Arts',
+              whatsappStatus: testData.whatsapp_status || 'connected'
+            }
           };
         } else {
-          fast2smsStatus = {
+          zokoStatus = {
             reachable: false,
             status: 'connection_failed',
-            message: `Fast2SMS API returned HTTP ${testResponse.status}`,
+            message: `Zoko WhatsApp API returned HTTP ${testResponse.status}`,
             httpStatus: testResponse.status
           };
         }
       } catch (testError) {
-        fast2smsStatus = {
+        zokoStatus = {
           reachable: false,
           status: 'connection_error',
-          message: `Failed to connect to Fast2SMS: ${testError.message}`,
+          message: `Failed to connect to Zoko WhatsApp API: ${testError.message}`,
           error: testError.message
         };
       }
@@ -186,15 +187,15 @@ export default async function handler(req, res) {
     let statusCode = 200;
     let healthMessage = 'All systems operational';
 
-    if (!FAST2SMS_API_KEY) {
+    if (!ZOKO_API_KEY) {
       overallStatus = 'degraded';
-      healthMessage = 'Fast2SMS API key not configured';
+      healthMessage = 'Zoko WhatsApp API key not configured';
       statusCode = 200; // Still return 200 but indicate degraded status
     }
 
-    if (fast2smsStatus.reachable === false) {
+    if (zokoStatus.reachable === false) {
       overallStatus = 'degraded';
-      healthMessage = 'Fast2SMS API connectivity issues detected';
+      healthMessage = 'Zoko WhatsApp API connectivity issues detected';
     }
 
     if (responseTime > 5000) {
@@ -214,29 +215,29 @@ export default async function handler(req, res) {
       system: systemInfo,
       request: requestInfo,
       performance,
-      fast2smsStatus,
+      zokoStatus,
       
       // Usage instructions and documentation
       usage: {
-        message: 'Mitti Arts SMS API powered by Fast2SMS is operational',
-        documentation: 'Send POST requests to SMS endpoints with required parameters',
+        message: 'Mitti Arts WhatsApp Messaging API powered by Zoko is operational',
+        documentation: 'Send POST requests to WhatsApp endpoints with required parameters',
         support: 'Contact: info@mittiarts.com',
-        testConnection: 'Add ?testConnection=true to test Fast2SMS connectivity'
+        testConnection: 'Add ?testConnection=true to test Zoko WhatsApp connectivity'
       },
 
-      // Fast2SMS specific information
-      fast2smsInfo: {
-        provider: 'Fast2SMS',
-        website: 'https://www.fast2sms.com',
-        apiEndpoint: FAST2SMS_URL,
-        route: `${FAST2SMS_ROUTE} (Quick Route)`,
-        dltRequired: false,
-        supportedCountries: ['India'],
-        features: ['SMS', 'OTP', 'Voice OTP', 'Email'],
-        estimatedCost: '₹0.25 - ₹0.50 per SMS',
-        documentation: 'https://www.fast2sms.com/docs',
-        dashboard: 'https://www.fast2sms.com/dashboard',
-        support: 'https://www.fast2sms.com/support'
+      // Zoko specific information
+      zokoInfo: {
+        provider: 'Zoko',
+        website: 'https://zoko.io',
+        apiEndpoint: ZOKO_API_URL,
+        channel: 'WhatsApp Business API',
+        messageTypes: ['text', 'template', 'media', 'interactive'],
+        supportedCountries: ['Global'],
+        features: ['WhatsApp Messages', 'Broadcast', 'Chatbot', 'Analytics'],
+        estimatedCost: 'Pay per message - varies by country',
+        documentation: 'https://docs.zoko.io',
+        dashboard: 'https://app.zoko.io',
+        support: 'https://zoko.io/support'
       },
 
       // Mitti Arts business specific information
@@ -245,15 +246,15 @@ export default async function handler(req, res) {
         businessType: 'Handcrafted Pottery & Terracotta Art',
         location: 'Hyderabad, Telangana, India',
         contact: '9441550927 / 7382150250',
-        smsTypes: [
-          'Invoice/Bill SMS',
-          'Advance Payment SMS', 
-          'Payment Completion SMS',
-          'Order Reminder SMS'
+        whatsappTypes: [
+          'Invoice/Bill WhatsApp Messages',
+          'Advance Payment WhatsApp Messages', 
+          'Payment Completion WhatsApp Messages',
+          'Order Reminder WhatsApp Messages'
         ],
         targetMarket: 'Indian pottery and handicraft customers',
         phoneFormat: 'Indian mobile numbers (10 digits starting with 6, 7, 8, or 9)',
-        invoiceSystem: 'Digital invoices with SMS notifications for pottery orders'
+        messagingSystem: 'WhatsApp Business messages for pottery orders with invoice links'
       },
 
       // API metrics and monitoring
@@ -262,11 +263,13 @@ export default async function handler(req, res) {
         activeEndpoints: Object.values(configuration.endpoints).filter(e => e.status === 'active').length,
         healthCheckTime: performance.responseTime,
         apiVersion: healthCheck.version,
-        lastHealthCheck: healthCheck.timestamp
+        lastHealthCheck: healthCheck.timestamp,
+        whatsappChannel: 'Enabled',
+        messagingProvider: 'Zoko'
       }
     };
 
-    console.log(`✅ Fast2SMS status check completed in ${performance.responseTime} - Status: ${overallStatus}`);
+    console.log(`✅ Zoko WhatsApp status check completed in ${performance.responseTime} - Status: ${overallStatus}`);
 
     return res.status(statusCode).json(response);
 
@@ -279,8 +282,8 @@ export default async function handler(req, res) {
       message: 'Internal server error during health check',
       error: 'Health check system failure',
       timestamp: new Date().toISOString(),
-      provider: 'Fast2SMS',
-      service: 'Mitti Arts SMS API',
+      provider: 'Zoko WhatsApp API',
+      service: 'Mitti Arts WhatsApp Messaging',
       
       performance: {
         responseTime: `${Date.now() - startTime}ms`,
@@ -303,11 +306,11 @@ export default async function handler(req, res) {
           'Server overload',
           'Memory issues',
           'Network connectivity problems',
-          'Fast2SMS API issues'
+          'Zoko WhatsApp API issues'
         ],
         recommendations: [
           'Check server resources',
-          'Verify Fast2SMS API status',
+          'Verify Zoko WhatsApp API status',
           'Review error logs',
           'Contact system administrator'
         ],

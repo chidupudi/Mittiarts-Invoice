@@ -1,4 +1,4 @@
-// api/send-sms.js - Simplified Fast2SMS Implementation for Mitti Arts
+// api/send-sms.js - Updated for Zoko WhatsApp API
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,12 +12,13 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed. Use POST method.' 
+      error: 'Method not allowed. Use POST method.',
+      provider: 'Zoko WhatsApp'
     });
   }
 
   try {
-    console.log('📱 Fast2SMS Request received:', {
+    console.log('📱 Zoko WhatsApp Invoice Message Request:', {
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
@@ -28,19 +29,24 @@ export default async function handler(req, res) {
     if (!phoneNumber || !customerName || !orderNumber) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: phoneNumber, customerName, orderNumber'
+        error: 'Missing required fields: phoneNumber, customerName, orderNumber',
+        provider: 'Zoko WhatsApp'
       });
     }
 
-    // Clean and validate phone number
+    // Clean and validate phone number for WhatsApp (international format)
     const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
     
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.'
+        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.',
+        provider: 'Zoko WhatsApp'
       });
     }
+
+    // Format for WhatsApp (with country code)
+    const whatsappNumber = `91${cleanNumber}`; // India country code
 
     // Generate invoice link
     let origin = req.headers.origin || req.headers.referer;
@@ -55,131 +61,155 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create message for Mitti Arts
-    const message = `Dear ${customerName.trim()},
+    // Create WhatsApp message for Mitti Arts
+    const message = `🏺 *Mitti Arts - Invoice Generated*
 
-🏺 Thank you for choosing Mitti Arts!
+Dear ${customerName.trim()},
 
-Order: ${orderNumber.trim()}
-Amount: Rs.${(totalAmount || 0).toFixed(2)}
+Thank you for choosing our handcrafted pottery! 
 
-View & Download Invoice:
+*Order Details:*
+📋 Order Number: ${orderNumber.trim()}
+💰 Amount: ₹${(totalAmount || 0).toFixed(2)}
+
+*View & Download Your Invoice:*
 ${billLink}
 
-Contact: 9441550927
-- Mitti Arts Team`;
+For any assistance, contact us:
+📞 9441550927
+📧 info@mittiarts.com
 
+*Mitti Arts Team*
+_Handcrafted with Love 🎨_`;
+
+    console.log('📱 Sending WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
     console.log('📝 Message length:', message.length, 'characters');
-    console.log('📞 Target number:', `${cleanNumber.slice(0, 5)}*****`);
 
-    // Validate message length
-    if (message.length > 1000) {
+    // Validate message length for WhatsApp
+    if (message.length > 4096) {
       return res.status(400).json({
         success: false,
-        error: 'Message too long. Please reduce to under 1000 characters.',
-        messageLength: message.length
+        error: 'Message too long. WhatsApp limit is 4096 characters.',
+        messageLength: message.length,
+        provider: 'Zoko WhatsApp'
       });
     }
 
-    // Fast2SMS API Configuration
-    const API_KEY = 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN';
-    const API_URL = 'https://www.fast2sms.com/dev/bulkV2';
+    // Zoko WhatsApp API Configuration
+    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
+    const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
 
-    // Prepare POST request payload
+    // Prepare WhatsApp message payload for Zoko
     const payload = {
-      message: message,
-      route: 'q',  // Quick SMS route
-      numbers: cleanNumber,
-      flash: '0'
+      channel: 'whatsapp',
+      recipient: whatsappNumber,
+      type: 'text',
+      message: {
+        text: message
+      }
     };
 
-    console.log('📡 Calling Fast2SMS API...');
+    console.log('📡 Calling Zoko WhatsApp API...');
 
-    // Send SMS via Fast2SMS API
-    const response = await fetch(API_URL, {
+    // Send WhatsApp message via Zoko API
+    const response = await fetch(ZOKO_API_URL, {
       method: 'POST',
       headers: {
-        'authorization': API_KEY,
+        'Authorization': `Bearer ${ZOKO_API_KEY}`,
         'Content-Type': 'application/json',
-        'cache-control': 'no-cache'
+        'Accept': 'application/json'
       },
       body: JSON.stringify(payload)
     });
 
-    console.log('📊 Fast2SMS Response Status:', response.status);
+    console.log('📊 Zoko Response Status:', response.status);
 
     if (!response.ok) {
-      throw new Error(`Fast2SMS API returned status ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ Zoko API Error Response:', errorText);
+      throw new Error(`Zoko WhatsApp API returned status ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('📊 Fast2SMS Response Data:', data);
+    console.log('📊 Zoko Response Data:', data);
 
-    // Handle Fast2SMS response
-    if (data.return === true) {
-      console.log('✅ SMS sent successfully via Fast2SMS');
+    // Handle successful Zoko response
+    if (data.success || data.id || data.message_id) {
+      console.log('✅ WhatsApp message sent successfully via Zoko');
       
       return res.status(200).json({
         success: true,
-        messageId: data.request_id,
-        message: 'SMS sent successfully',
-        provider: 'Fast2SMS',
-        route: 'Quick SMS',
-        cost: '₹0.25 per SMS',
+        messageId: data.id || data.message_id || data.request_id,
+        message: 'WhatsApp invoice message sent successfully',
+        provider: 'Zoko WhatsApp',
+        channel: 'WhatsApp',
+        billToken: billToken || null,
+        billLink: billLink,
         sentAt: new Date().toISOString(),
         phoneNumber: `+91${cleanNumber}`,
-        billLink: billLink,
+        whatsappNumber: whatsappNumber,
+        cost: 'Per message pricing',
         
-        // Additional response data
-        fast2smsData: {
-          requestId: data.request_id,
-          returnStatus: data.return
-        }
+        // WhatsApp specific data
+        whatsappData: {
+          messageId: data.id || data.message_id,
+          status: data.status || 'sent',
+          recipient: whatsappNumber
+        },
+        
+        // Zoko response data
+        zokoResponse: data
       });
     } else {
-      // Handle Fast2SMS error response
-      let errorMsg = 'Unknown Fast2SMS API error';
+      // Zoko returned error
+      let errorMsg = 'Unknown Zoko WhatsApp API error';
       
-      if (data.message) {
-        if (Array.isArray(data.message)) {
-          errorMsg = data.message.join(', ');
-        } else {
-          errorMsg = data.message;
-        }
+      if (data.error) {
+        errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+      } else if (data.message) {
+        errorMsg = data.message;
+      } else if (data.errors) {
+        errorMsg = Array.isArray(data.errors) ? data.errors.join(', ') : JSON.stringify(data.errors);
       }
       
-      console.error('❌ Fast2SMS Error:', errorMsg);
+      console.error('❌ Zoko WhatsApp Error:', errorMsg);
       
       return res.status(422).json({
         success: false,
-        error: `Fast2SMS API Error: ${errorMsg}`,
-        provider: 'Fast2SMS',
+        error: `Zoko WhatsApp API Error: ${errorMsg}`,
+        provider: 'Zoko WhatsApp',
+        channel: 'WhatsApp',
         attemptedAt: new Date().toISOString(),
         phoneNumber: `+91${cleanNumber}`,
-        fast2smsResponse: data
+        whatsappNumber: whatsappNumber,
+        zokoResponse: data
       });
     }
 
   } catch (error) {
-    console.error('❌ SMS Handler Error:', error);
+    console.error('❌ WhatsApp Handler Error:', error);
     
-    // Determine error type and provide appropriate response
-    let errorMessage = 'Failed to send SMS';
+    // Determine error type and appropriate response
+    let errorMessage = 'Failed to send WhatsApp invoice message';
     let statusCode = 500;
     let errorCode = 'UNKNOWN';
     
     if (error.message?.includes('fetch')) {
-      errorMessage = 'Failed to connect to Fast2SMS. Please check internet connection.';
+      errorMessage = 'Failed to connect to Zoko WhatsApp API. Please check internet connection.';
       statusCode = 503;
       errorCode = 'NETWORK_ERROR';
     } else if (error.message?.includes('timeout')) {
-      errorMessage = 'SMS request timed out. Please try again.';
+      errorMessage = 'WhatsApp message request timed out. Please try again.';
       statusCode = 504;
       errorCode = 'TIMEOUT';
-    } else if (error.message?.includes('authorization')) {
-      errorMessage = 'Fast2SMS authentication failed. Please check API key.';
+    } else if (error.message?.includes('401') || error.message?.includes('403')) {
+      errorMessage = 'Zoko WhatsApp API authentication failed. Please check API key.';
       statusCode = 401;
       errorCode = 'AUTH_ERROR';
+    } else if (error.message?.includes('429')) {
+      errorMessage = 'Rate limit exceeded. Please try again later.';
+      statusCode = 429;
+      errorCode = 'RATE_LIMIT';
     } else if (error.message) {
       errorMessage = error.message;
       errorCode = 'API_ERROR';
@@ -189,7 +219,8 @@ Contact: 9441550927
       success: false,
       error: errorMessage,
       errorCode: errorCode,
-      provider: 'Fast2SMS',
+      provider: 'Zoko WhatsApp',
+      channel: 'WhatsApp',
       attemptedAt: new Date().toISOString()
     });
   }
