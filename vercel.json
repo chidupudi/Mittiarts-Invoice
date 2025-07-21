@@ -1,14 +1,41 @@
 {
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ],
   "functions": {
     "api/send-sms.js": {
+      "memory": 256,
       "maxDuration": 30
     },
     "api/send-advance-sms.js": {
+      "memory": 256,
       "maxDuration": 30
     },
     "api/send-completion-sms.js": {
+      "memory": 256,
       "maxDuration": 30
+    },
+    "api/status.js": {
+      "memory": 128,
+      "maxDuration": 10
+    },
+    "api/test.js": {
+      "memory": 128,
+      "maxDuration": 10
     }
+  },
+  "env": {
+    "NODE_ENV": "production"
   },
   "headers": [
     {
@@ -24,7 +51,7 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "X-Requested-With, Content-Type, Accept, Authorization"
+          "value": "Content-Type, Authorization, X-Requested-With"
         }
       ]
     }
