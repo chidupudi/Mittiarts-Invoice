@@ -1,4 +1,4 @@
-// api/send-sms.js - Zoko WhatsApp Implementation for Regular Invoice Messages
+// api/send-sms.js - Multi-provider SMS with Zoko WhatsApp primary and Fast2SMS fallback
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,14 +12,12 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed. Use POST method.',
-      smsType: 'bill',
-      provider: 'Zoko WhatsApp'
+      error: 'Method not allowed. Use POST method.'
     });
   }
 
   try {
-    console.log('📱 Zoko WhatsApp Invoice Message Request:', {
+    console.log('📱 Multi-provider SMS Request:', {
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
@@ -36,9 +34,7 @@ export default async function handler(req, res) {
     if (!phoneNumber || !customerName || !orderNumber) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: phoneNumber, customerName, orderNumber',
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp'
+        error: 'Missing required fields: phoneNumber, customerName, orderNumber'
       });
     }
 
@@ -48,14 +44,9 @@ export default async function handler(req, res) {
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.',
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp'
+        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.'
       });
     }
-
-    // Format for WhatsApp (with country code)
-    const whatsappNumber = `91${cleanNumber}`;
 
     // Generate invoice link
     let origin = req.headers.origin || req.headers.referer;
@@ -70,8 +61,8 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create WhatsApp message for pottery business
-    const message = `🏺 *Mitti Arts - Invoice Generated*
+    // Create WhatsApp message for Zoko
+    const whatsappMessage = `🏺 *Mitti Arts - Invoice Generated*
 
 Dear ${customerName.trim()},
 
@@ -86,185 +77,170 @@ ${billLink}
 
 Your beautiful pottery pieces are ready! 🎨
 
-*Payment Options:*
-• Cash at store
-• UPI/Card payment
-• Bank transfer
-
 *Contact & Location:*
 📞 9441550927 / 7382150250
 🏪 Opp. Romoji Film City, Hyderabad
 📧 info@mittiarts.com
 
 *Mitti Arts Team*
-_Handcrafted with Love 🎨_
+_Handcrafted with Love 🎨_`;
 
-*Follow us for more pottery creations!*`;
+    // Create SMS message for Fast2SMS fallback
+    const smsMessage = `Mitti Arts Invoice
+Dear ${customerName.trim()},
+Order: ${orderNumber.trim()}
+Amount: Rs.${(totalAmount || 0).toFixed(2)}
+Invoice: ${billLink}
+Contact: 9441550927
+- Mitti Arts Team`;
 
-    console.log('📱 Sending invoice WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
-    console.log('📝 Message length:', message.length, 'characters');
-    console.log('💰 Amount:', totalAmount);
+    console.log('📱 Attempting to send via Zoko WhatsApp first...');
 
-    // Validate message length for WhatsApp
-    if (message.length > 4096) {
-      return res.status(400).json({
-        success: false,
-        error: 'Message too long. WhatsApp limit is 4096 characters.',
-        messageLength: message.length,
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp'
-      });
-    }
+    // Try Zoko WhatsApp first
+    try {
+      const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
+      const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
+      const whatsappNumber = `91${cleanNumber}`;
 
-    // Zoko WhatsApp API Configuration
-    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
-    const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
+      const zokoPayload = {
+        channel: 'whatsapp',
+        recipient: whatsappNumber,
+        type: 'text',
+        message: {
+          text: whatsappMessage
+        }
+      };
 
-    // Prepare WhatsApp message payload for Zoko
-    const payload = {
-      channel: 'whatsapp',
-      recipient: whatsappNumber,
-      type: 'text',
-      message: {
-        text: message
-      }
-    };
+      console.log('📡 Calling Zoko WhatsApp API...');
 
-    console.log('📡 Calling Zoko WhatsApp API for invoice...');
+      // Add timeout and better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-    // Send WhatsApp message via Zoko API
-    const response = await fetch(ZOKO_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${ZOKO_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    console.log('📊 Zoko Response Status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Zoko API Error Response:', errorText);
-      throw new Error(`Zoko WhatsApp API returned status ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('📊 Zoko Response Data:', data);
-
-    // Handle successful Zoko response
-    if (data.success || data.id || data.message_id) {
-      console.log('✅ Invoice WhatsApp message sent successfully via Zoko');
-      
-      return res.status(200).json({
-        success: true,
-        messageId: data.id || data.message_id || data.request_id,
-        message: 'Invoice WhatsApp message sent successfully',
-        smsType: 'bill',
-        billToken: billToken || null,
-        billLink: billLink,
-        provider: 'Zoko WhatsApp',
-        channel: 'WhatsApp',
-        sentAt: new Date().toISOString(),
-        phoneNumber: `+91${cleanNumber}`,
-        whatsappNumber: whatsappNumber,
-        cost: 'Per message pricing',
-        
-        // Invoice specific data
-        invoiceDetails: {
-          orderNumber: orderNumber.trim(),
-          totalAmount: totalAmount || 0,
-          customerName: customerName.trim(),
-          invoiceGenerated: !!billToken
+      const zokoResponse = await fetch(ZOKO_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ZOKO_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Mitti-Arts-POS/1.0'
         },
-        
-        // WhatsApp specific data
-        whatsappData: {
-          messageId: data.id || data.message_id,
-          status: data.status || 'sent',
-          recipient: whatsappNumber,
-          messageType: 'text',
-          characters: message.length
-        }
+        body: JSON.stringify(zokoPayload),
+        signal: controller.signal
       });
-    } else {
-      // Zoko returned error
-      let errorMsg = 'Unknown Zoko WhatsApp API error';
-      
-      if (data.error) {
-        errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-      } else if (data.message) {
-        errorMsg = data.message;
-      } else if (data.errors) {
-        errorMsg = Array.isArray(data.errors) ? data.errors.join(', ') : JSON.stringify(data.errors);
+
+      clearTimeout(timeoutId);
+
+      console.log('📊 Zoko Response Status:', zokoResponse.status);
+
+      if (zokoResponse.ok) {
+        const zokoData = await zokoResponse.json();
+        console.log('📊 Zoko Response Data:', zokoData);
+
+        if (zokoData.success || zokoData.id || zokoData.message_id) {
+          console.log('✅ Success with Zoko WhatsApp');
+          
+          return res.status(200).json({
+            success: true,
+            messageId: zokoData.id || zokoData.message_id,
+            message: 'WhatsApp message sent successfully via Zoko',
+            provider: 'Zoko WhatsApp',
+            channel: 'WhatsApp',
+            sentAt: new Date().toISOString(),
+            phoneNumber: `+91${cleanNumber}`,
+            billLink: billLink,
+            cost: 'Per message pricing'
+          });
+        }
       }
+
+      throw new Error(`Zoko API returned status ${zokoResponse.status}`);
+
+    } catch (zokoError) {
+      console.log('❌ Zoko WhatsApp failed:', zokoError.message);
+      console.log('🔄 Falling back to Fast2SMS...');
       
-      console.error('❌ Zoko WhatsApp Invoice Error:', errorMsg);
-      
-      return res.status(422).json({
-        success: false,
-        error: `Zoko WhatsApp API Error: ${errorMsg}`,
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp',
-        channel: 'WhatsApp',
-        attemptedAt: new Date().toISOString(),
-        phoneNumber: `+91${cleanNumber}`,
-        whatsappNumber: whatsappNumber,
-        zokoResponse: data,
-        
-        invoiceContext: {
-          orderNumber: orderNumber.trim(),
-          totalAmount: totalAmount || 0,
-          billToken: billToken || null
+      // Fallback to Fast2SMS
+      try {
+        const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+          method: 'POST',
+          headers: {
+            'authorization': 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: smsMessage,
+            route: 'q',
+            numbers: cleanNumber,
+            flash: '0'
+          })
+        });
+
+        const fast2smsData = await fast2smsResponse.json();
+        console.log('📊 Fast2SMS Response:', fast2smsData);
+
+        if (fast2smsResponse.ok && fast2smsData.return === true) {
+          console.log('✅ Success with Fast2SMS fallback');
+          
+          return res.status(200).json({
+            success: true,
+            messageId: fast2smsData.request_id,
+            message: 'SMS sent successfully via Fast2SMS (fallback)',
+            provider: 'Fast2SMS (Fallback)',
+            channel: 'SMS',
+            sentAt: new Date().toISOString(),
+            phoneNumber: `+91${cleanNumber}`,
+            billLink: billLink,
+            cost: 'SMS pricing',
+            fallbackReason: 'Zoko WhatsApp unavailable'
+          });
         }
-      });
+
+        throw new Error(`Fast2SMS error: ${JSON.stringify(fast2smsData)}`);
+
+      } catch (fast2smsError) {
+        console.log('❌ Fast2SMS also failed:', fast2smsError.message);
+        
+        // Both providers failed
+        return res.status(503).json({
+          success: false,
+          error: 'All messaging providers are currently unavailable',
+          attempts: [
+            {
+              provider: 'Zoko WhatsApp',
+              error: zokoError.message,
+              timestamp: new Date().toISOString()
+            },
+            {
+              provider: 'Fast2SMS',
+              error: fast2smsError.message,
+              timestamp: new Date().toISOString()
+            }
+          ],
+          fallbackOptions: {
+            manual: {
+              whatsappLink: `https://wa.me/91${cleanNumber}?text=${encodeURIComponent(whatsappMessage)}`,
+              smsText: smsMessage,
+              customerPhone: `+91${cleanNumber}`
+            },
+            recommendations: [
+              'Use the WhatsApp link to manually send the message',
+              'Call the customer directly at +91' + cleanNumber,
+              'Send the invoice link via email if available',
+              'Check provider status and try again later'
+            ]
+          }
+        });
+      }
     }
 
   } catch (error) {
-    console.error('❌ Invoice WhatsApp Handler Error:', error);
+    console.error('❌ Handler error:', error);
     
-    // Determine error type and appropriate response
-    let errorMessage = 'Failed to send invoice WhatsApp message';
-    let statusCode = 500;
-    let errorCode = 'UNKNOWN';
-    
-    if (error.message?.includes('fetch')) {
-      errorMessage = 'Failed to connect to Zoko WhatsApp API. Please check internet connection.';
-      statusCode = 503;
-      errorCode = 'NETWORK_ERROR';
-    } else if (error.message?.includes('timeout')) {
-      errorMessage = 'WhatsApp message request timed out. Please try again.';
-      statusCode = 504;
-      errorCode = 'TIMEOUT';
-    } else if (error.message?.includes('401') || error.message?.includes('403')) {
-      errorMessage = 'Zoko WhatsApp API authentication failed. Please check API key.';
-      statusCode = 401;
-      errorCode = 'AUTH_ERROR';
-    } else if (error.message?.includes('429')) {
-      errorMessage = 'Rate limit exceeded. Please try again later.';
-      statusCode = 429;
-      errorCode = 'RATE_LIMIT';
-    } else if (error.message) {
-      errorMessage = error.message;
-      errorCode = 'API_ERROR';
-    }
-    
-    return res.status(statusCode).json({
+    return res.status(500).json({
       success: false,
-      error: errorMessage,
-      errorCode: errorCode,
-      smsType: 'bill',
-      provider: 'Zoko WhatsApp',
-      channel: 'WhatsApp',
-      attemptedAt: new Date().toISOString(),
-      
-      invoiceContext: {
-        orderNumber: req.body.orderNumber,
-        totalAmount: req.body.totalAmount,
-        billToken: req.body.billToken
-      }
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 }

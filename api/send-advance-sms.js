@@ -13,13 +13,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ 
       success: false, 
       error: 'Method not allowed. Use POST method.',
-      smsType: 'advance',
+      smsType: 'bill',
       provider: 'Zoko WhatsApp'
     });
   }
 
   try {
-    console.log('📱 Zoko WhatsApp Advance Payment Message Request:', {
+    console.log('📱 Zoko WhatsApp Invoice Message Request:', {
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
@@ -28,9 +28,8 @@ export default async function handler(req, res) {
       phoneNumber, 
       customerName, 
       orderNumber, 
-      advanceAmount,
-      remainingAmount,
-      billToken 
+      billToken,
+      totalAmount 
     } = req.body;
 
     // Validate required fields
@@ -38,25 +37,7 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: phoneNumber, customerName, orderNumber',
-        smsType: 'advance',
-        provider: 'Zoko WhatsApp'
-      });
-    }
-
-    if (advanceAmount === undefined || advanceAmount === null || isNaN(advanceAmount)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Valid advance amount is required',
-        smsType: 'advance',
-        provider: 'Zoko WhatsApp'
-      });
-    }
-
-    if (remainingAmount === undefined || remainingAmount === null || isNaN(remainingAmount)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Valid remaining amount is required',
-        smsType: 'advance',
+        smsType: 'bill',
         provider: 'Zoko WhatsApp'
       });
     }
@@ -68,26 +49,13 @@ export default async function handler(req, res) {
       return res.status(400).json({
         success: false,
         error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.',
-        smsType: 'advance',
+        smsType: 'bill',
         provider: 'Zoko WhatsApp'
       });
     }
 
     // Format for WhatsApp (with country code)
     const whatsappNumber = `91${cleanNumber}`;
-
-    // Validate amounts
-    const advance = Number(advanceAmount);
-    const remaining = Number(remainingAmount);
-    
-    if (advance <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Advance amount must be greater than zero',
-        smsType: 'advance',
-        provider: 'Zoko WhatsApp'
-      });
-    }
 
     // Generate invoice link
     let origin = req.headers.origin || req.headers.referer;
@@ -102,44 +70,40 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create advance payment WhatsApp message for pottery business
-    const message = `🏺 *Mitti Arts - Advance Payment Received*
+    // Create WhatsApp message for pottery business
+    const message = `🏺 *Mitti Arts - Invoice Generated*
 
 Dear ${customerName.trim()},
 
-Thank you for your advance payment! Your pottery order is now confirmed. 🎨
+Thank you for choosing our handcrafted pottery! 
 
-*Payment Details:*
-📋 Order: ${orderNumber.trim()}
-✅ Advance Paid: *₹${advance.toFixed(2)}*
-⏳ Balance Due: *₹${remaining.toFixed(2)}*
+*Order Details:*
+📋 Order Number: ${orderNumber.trim()}
+💰 Amount: ₹${(totalAmount || 0).toFixed(2)}
 
-*View Your Advance Invoice:*
+*View & Download Your Invoice:*
 ${billLink}
 
-*Order Status:*
-🔥 Your handcrafted pottery is now in production
-📅 Estimated completion: 3-7 working days
-🎯 Balance payment due: ${remaining > 0 ? 'Before delivery' : 'Completed! ✅'}
+Your beautiful pottery pieces are ready! 🎨
 
-*Payment Options for Balance:*
-💰 Cash at store pickup
-📱 UPI/Card payment
-🏦 Bank transfer available
+*Payment Options:*
+• Cash at store
+• UPI/Card payment
+• Bank transfer
 
-*Store Details:*
+*Contact & Location:*
 📞 9441550927 / 7382150250
 🏪 Opp. Romoji Film City, Hyderabad
 📧 info@mittiarts.com
 
-We'll notify you when your pottery masterpiece is ready! 🏺
-
 *Mitti Arts Team*
-_Handcrafted with Love 🎨_`;
+_Handcrafted with Love 🎨_
 
-    console.log('📱 Sending advance WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
+*Follow us for more pottery creations!*`;
+
+    console.log('📱 Sending invoice WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
     console.log('📝 Message length:', message.length, 'characters');
-    console.log('💰 Advance:', advance, 'Remaining:', remaining);
+    console.log('💰 Amount:', totalAmount);
 
     // Validate message length for WhatsApp
     if (message.length > 4096) {
@@ -147,7 +111,7 @@ _Handcrafted with Love 🎨_`;
         success: false,
         error: 'Message too long. WhatsApp limit is 4096 characters.',
         messageLength: message.length,
-        smsType: 'advance',
+        smsType: 'bill',
         provider: 'Zoko WhatsApp'
       });
     }
@@ -166,18 +130,27 @@ _Handcrafted with Love 🎨_`;
       }
     };
 
-    console.log('📡 Calling Zoko WhatsApp API for advance payment...');
+    console.log('📡 Calling Zoko WhatsApp API for invoice...');
 
-    // Send WhatsApp message via Zoko API
+    // Send WhatsApp message via Zoko API with SSL handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+
     const response = await fetch(ZOKO_API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${ZOKO_API_KEY}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'User-Agent': 'Mitti-Arts-POS/1.0'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      // Handle SSL issues
+      agent: false
     });
+
+    clearTimeout(timeoutId);
 
     console.log('📊 Zoko Response Status:', response.status);
 
@@ -192,13 +165,13 @@ _Handcrafted with Love 🎨_`;
 
     // Handle successful Zoko response
     if (data.success || data.id || data.message_id) {
-      console.log('✅ Advance payment WhatsApp message sent successfully via Zoko');
+      console.log('✅ Invoice WhatsApp message sent successfully via Zoko');
       
       return res.status(200).json({
         success: true,
         messageId: data.id || data.message_id || data.request_id,
-        message: 'Advance payment WhatsApp message sent successfully',
-        smsType: 'advance',
+        message: 'Invoice WhatsApp message sent successfully',
+        smsType: 'bill',
         billToken: billToken || null,
         billLink: billLink,
         provider: 'Zoko WhatsApp',
@@ -208,14 +181,12 @@ _Handcrafted with Love 🎨_`;
         whatsappNumber: whatsappNumber,
         cost: 'Per message pricing',
         
-        // Advance payment specific data
-        paymentDetails: {
-          advanceAmount: advance,
-          remainingAmount: remaining,
-          totalAmount: advance + remaining,
-          advancePercentage: ((advance / (advance + remaining)) * 100).toFixed(1),
+        // Invoice specific data
+        invoiceDetails: {
           orderNumber: orderNumber.trim(),
-          customerName: customerName.trim()
+          totalAmount: totalAmount || 0,
+          customerName: customerName.trim(),
+          invoiceGenerated: !!billToken
         },
         
         // WhatsApp specific data
@@ -239,12 +210,12 @@ _Handcrafted with Love 🎨_`;
         errorMsg = Array.isArray(data.errors) ? data.errors.join(', ') : JSON.stringify(data.errors);
       }
       
-      console.error('❌ Zoko WhatsApp Advance Error:', errorMsg);
+      console.error('❌ Zoko WhatsApp Invoice Error:', errorMsg);
       
       return res.status(422).json({
         success: false,
         error: `Zoko WhatsApp API Error: ${errorMsg}`,
-        smsType: 'advance',
+        smsType: 'bill',
         provider: 'Zoko WhatsApp',
         channel: 'WhatsApp',
         attemptedAt: new Date().toISOString(),
@@ -252,19 +223,19 @@ _Handcrafted with Love 🎨_`;
         whatsappNumber: whatsappNumber,
         zokoResponse: data,
         
-        paymentContext: {
-          advanceAmount: advance,
-          remainingAmount: remaining,
-          orderNumber: orderNumber.trim()
+        invoiceContext: {
+          orderNumber: orderNumber.trim(),
+          totalAmount: totalAmount || 0,
+          billToken: billToken || null
         }
       });
     }
 
   } catch (error) {
-    console.error('❌ Advance WhatsApp Handler Error:', error);
+    console.error('❌ Invoice WhatsApp Handler Error:', error);
     
     // Determine error type and appropriate response
-    let errorMessage = 'Failed to send advance payment WhatsApp message';
+    let errorMessage = 'Failed to send invoice WhatsApp message';
     let statusCode = 500;
     let errorCode = 'UNKNOWN';
     
@@ -293,15 +264,15 @@ _Handcrafted with Love 🎨_`;
       success: false,
       error: errorMessage,
       errorCode: errorCode,
-      smsType: 'advance',
+      smsType: 'bill',
       provider: 'Zoko WhatsApp',
       channel: 'WhatsApp',
       attemptedAt: new Date().toISOString(),
       
-      paymentContext: {
-        advanceAmount: req.body.advanceAmount,
-        remainingAmount: req.body.remainingAmount,
-        orderNumber: req.body.orderNumber
+      invoiceContext: {
+        orderNumber: req.body.orderNumber,
+        totalAmount: req.body.totalAmount,
+        billToken: req.body.billToken
       }
     });
   }
