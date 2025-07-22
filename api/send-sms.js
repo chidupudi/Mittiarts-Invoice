@@ -1,13 +1,8 @@
-// api/send-sms.js - Multi-provider fallback messaging system
+// api/send-sms.js - Zoko WhatsApp Implementation for Regular Invoice Messages
 export default async function handler(req, res) {
-  console.log('🔍 Multi-provider messaging API called:', {
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
-
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
@@ -17,29 +12,50 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false, 
-      error: 'Method not allowed. Use POST method.'
+      error: 'Method not allowed. Use POST method.',
+      smsType: 'bill',
+      provider: 'Zoko WhatsApp'
     });
   }
 
   try {
-    const { phoneNumber, customerName, orderNumber, billToken, totalAmount } = req.body || {};
+    console.log('📱 Zoko WhatsApp Invoice Message Request:', {
+      bodyKeys: Object.keys(req.body || {}),
+      timestamp: new Date().toISOString()
+    });
 
-    // Validate inputs
+    const { 
+      phoneNumber, 
+      customerName, 
+      orderNumber, 
+      billToken,
+      totalAmount 
+    } = req.body;
+
+    // Validate required fields
     if (!phoneNumber || !customerName || !orderNumber) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: phoneNumber, customerName, orderNumber'
+        error: 'Missing required fields: phoneNumber, customerName, orderNumber',
+        smsType: 'bill',
+        provider: 'Zoko WhatsApp'
       });
     }
 
+    // Clean and validate phone number
     const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
     
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid Indian mobile number'
+        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.',
+        smsType: 'bill',
+        provider: 'Zoko WhatsApp'
       });
     }
+
+    // Format for WhatsApp (with country code)
+    const whatsappNumber = `91${cleanNumber}`;
 
     // Generate invoice link
     let origin = req.headers.origin || req.headers.referer;
@@ -54,8 +70,8 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create message content
-    const whatsappMessage = `🏺 *Mitti Arts - Invoice Generated*
+    // Create WhatsApp message for pottery business
+    const message = `🏺 *Mitti Arts - Invoice Generated*
 
 Dear ${customerName.trim()},
 
@@ -68,213 +84,187 @@ Thank you for choosing our handcrafted pottery!
 *View & Download Your Invoice:*
 ${billLink}
 
-For assistance: 9441550927
+Your beautiful pottery pieces are ready! 🎨
+
+*Payment Options:*
+• Cash at store
+• UPI/Card payment
+• Bank transfer
+
+*Contact & Location:*
+📞 9441550927 / 7382150250
+🏪 Opp. Romoji Film City, Hyderabad
+📧 info@mittiarts.com
 
 *Mitti Arts Team*
-_Handcrafted with Love 🎨_`;
+_Handcrafted with Love 🎨_
 
-    const smsMessage = `Mitti Arts Invoice
-Dear ${customerName.trim()},
-Order: ${orderNumber.trim()}
-Amount: Rs.${(totalAmount || 0).toFixed(2)}
-Invoice: ${billLink}
-Contact: 9441550927
-- Mitti Arts Team`;
+*Follow us for more pottery creations!*`;
 
-    console.log('📝 Messages prepared');
+    console.log('📱 Sending invoice WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
+    console.log('📝 Message length:', message.length, 'characters');
+    console.log('💰 Amount:', totalAmount);
 
-    // Provider configurations
-    const providers = [
-      {
-        name: 'WhatsApp.Chat-API',
-        type: 'whatsapp',
-        enabled: true,
-        test: async () => {
-          const response = await fetch('https://api.chat-api.com/instance1/status', {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          return response.ok;
-        },
-        send: async () => {
-          // This is a placeholder - you'd need to register with chat-api.com
-          throw new Error('Chat-API requires instance setup');
-        }
-      },
-      {
-        name: 'UltraMsg-WhatsApp',
-        type: 'whatsapp', 
-        enabled: true,
-        send: async () => {
-          const ultraMsgUrl = 'https://api.ultramsg.com/instance1/messages/chat';
-          // This requires UltraMsg setup - placeholder
-          throw new Error('UltraMsg requires instance setup');
-        }
-      },
-      {
-        name: 'Fast2SMS-Fallback',
-        type: 'sms',
-        enabled: true,
-        send: async () => {
-          console.log('📱 Trying Fast2SMS as fallback...');
-          
-          const fast2smsResponse = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-            method: 'POST',
-            headers: {
-              'authorization': 'EeFV7lHYx2p4ajcG3MTXd6Lso8fuqJzZbSP9gRhmnIBwOACN15VYMcOadnw37ZboXizT6GEl24U5ruhN',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              message: smsMessage,
-              route: 'q',
-              numbers: cleanNumber,
-              flash: '0'
-            })
-          });
-
-          if (!fast2smsResponse.ok) {
-            throw new Error(`Fast2SMS failed: ${fast2smsResponse.status}`);
-          }
-
-          const data = await fast2smsResponse.json();
-          if (data.return === true) {
-            return {
-              success: true,
-              messageId: data.request_id,
-              provider: 'Fast2SMS (SMS Fallback)',
-              channel: 'SMS'
-            };
-          } else {
-            throw new Error(`Fast2SMS error: ${JSON.stringify(data)}`);
-          }
-        }
-      },
-      {
-        name: 'TextLocal-SMS',
-        type: 'sms',
-        enabled: true,
-        send: async () => {
-          console.log('📱 Trying TextLocal SMS...');
-          
-          // TextLocal API - you'd need to get an API key
-          const textLocalResponse = await fetch('https://api.textlocal.in/send/', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-              apikey: 'YOUR_TEXTLOCAL_API_KEY', // Replace with actual key
-              numbers: `91${cleanNumber}`,
-              message: smsMessage,
-              sender: 'MITTI'
-            })
-          });
-
-          // This will fail without proper API key, so skip for now
-          throw new Error('TextLocal requires API key setup');
-        }
-      },
-      {
-        name: 'Simple-HTTP-WhatsApp',
-        type: 'whatsapp',
-        enabled: true,
-        send: async () => {
-          console.log('📱 Trying simple HTTP WhatsApp redirect...');
-          
-          // Create a WhatsApp web link (doesn't actually send, but creates a clickable link)
-          const whatsappWebUrl = `https://wa.me/91${cleanNumber}?text=${encodeURIComponent(whatsappMessage)}`;
-          
-          // For now, we'll return this as a "success" with the link
-          // In a real scenario, you might want to use WhatsApp Business API
-          return {
-            success: true,
-            messageId: `whatsapp_link_${Date.now()}`,
-            provider: 'WhatsApp Web Link',
-            channel: 'WhatsApp Link',
-            whatsappLink: whatsappWebUrl,
-            note: 'WhatsApp web link generated - manual sending required'
-          };
-        }
-      }
-    ];
-
-    // Try each provider in order
-    const attempts = [];
-    
-    for (const provider of providers) {
-      if (!provider.enabled) continue;
-      
-      try {
-        console.log(`🔄 Attempting ${provider.name}...`);
-        
-        const result = await provider.send();
-        
-        console.log(`✅ Success with ${provider.name}`);
-        
-        return res.status(200).json({
-          success: true,
-          messageId: result.messageId,
-          message: 'Message sent successfully',
-          provider: result.provider || provider.name,
-          channel: result.channel || provider.type,
-          billToken: billToken || null,
-          billLink: billLink,
-          sentAt: new Date().toISOString(),
-          phoneNumber: `+91${cleanNumber}`,
-          whatsappLink: result.whatsappLink, // If applicable
-          note: result.note, // If applicable
-          attempts: attempts.length + 1
-        });
-        
-      } catch (providerError) {
-        console.log(`❌ ${provider.name} failed:`, providerError.message);
-        attempts.push({
-          provider: provider.name,
-          type: provider.type,
-          error: providerError.message,
-          timestamp: new Date().toISOString()
-        });
-      }
+    // Validate message length for WhatsApp
+    if (message.length > 4096) {
+      return res.status(400).json({
+        success: false,
+        error: 'Message too long. WhatsApp limit is 4096 characters.',
+        messageLength: message.length,
+        smsType: 'bill',
+        provider: 'Zoko WhatsApp'
+      });
     }
 
-    // If all providers failed
-    console.log('❌ All messaging providers failed');
-    
-    return res.status(503).json({
-      success: false,
-      error: 'All messaging providers are currently unavailable',
-      attempts: attempts,
-      fallbackOptions: {
-        manual: {
-          whatsappLink: `https://wa.me/91${cleanNumber}?text=${encodeURIComponent(whatsappMessage)}`,
-          smsText: smsMessage,
-          customerPhone: `+91${cleanNumber}`
-        },
-        recommendations: [
-          'Use the WhatsApp link to manually send the message',
-          'Call the customer directly at +91' + cleanNumber,
-          'Send the invoice link via email if available',
-          'Check provider status and try again later'
-        ]
-      },
-      troubleshooting: {
-        zokoIssue: 'Zoko API experiencing TLS certificate issues',
-        alternatives: [
-          'Set up UltraMsg for WhatsApp messaging',
-          'Configure TextLocal for SMS backup',
-          'Use WhatsApp Business API directly',
-          'Enable email notifications as backup'
-        ]
+    // Zoko WhatsApp API Configuration
+    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
+    const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
+
+    // Prepare WhatsApp message payload for Zoko
+    const payload = {
+      channel: 'whatsapp',
+      recipient: whatsappNumber,
+      type: 'text',
+      message: {
+        text: message
       }
+    };
+
+    console.log('📡 Calling Zoko WhatsApp API for invoice...');
+
+    // Send WhatsApp message via Zoko API
+    const response = await fetch(ZOKO_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ZOKO_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
 
+    console.log('📊 Zoko Response Status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Zoko API Error Response:', errorText);
+      throw new Error(`Zoko WhatsApp API returned status ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('📊 Zoko Response Data:', data);
+
+    // Handle successful Zoko response
+    if (data.success || data.id || data.message_id) {
+      console.log('✅ Invoice WhatsApp message sent successfully via Zoko');
+      
+      return res.status(200).json({
+        success: true,
+        messageId: data.id || data.message_id || data.request_id,
+        message: 'Invoice WhatsApp message sent successfully',
+        smsType: 'bill',
+        billToken: billToken || null,
+        billLink: billLink,
+        provider: 'Zoko WhatsApp',
+        channel: 'WhatsApp',
+        sentAt: new Date().toISOString(),
+        phoneNumber: `+91${cleanNumber}`,
+        whatsappNumber: whatsappNumber,
+        cost: 'Per message pricing',
+        
+        // Invoice specific data
+        invoiceDetails: {
+          orderNumber: orderNumber.trim(),
+          totalAmount: totalAmount || 0,
+          customerName: customerName.trim(),
+          invoiceGenerated: !!billToken
+        },
+        
+        // WhatsApp specific data
+        whatsappData: {
+          messageId: data.id || data.message_id,
+          status: data.status || 'sent',
+          recipient: whatsappNumber,
+          messageType: 'text',
+          characters: message.length
+        }
+      });
+    } else {
+      // Zoko returned error
+      let errorMsg = 'Unknown Zoko WhatsApp API error';
+      
+      if (data.error) {
+        errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+      } else if (data.message) {
+        errorMsg = data.message;
+      } else if (data.errors) {
+        errorMsg = Array.isArray(data.errors) ? data.errors.join(', ') : JSON.stringify(data.errors);
+      }
+      
+      console.error('❌ Zoko WhatsApp Invoice Error:', errorMsg);
+      
+      return res.status(422).json({
+        success: false,
+        error: `Zoko WhatsApp API Error: ${errorMsg}`,
+        smsType: 'bill',
+        provider: 'Zoko WhatsApp',
+        channel: 'WhatsApp',
+        attemptedAt: new Date().toISOString(),
+        phoneNumber: `+91${cleanNumber}`,
+        whatsappNumber: whatsappNumber,
+        zokoResponse: data,
+        
+        invoiceContext: {
+          orderNumber: orderNumber.trim(),
+          totalAmount: totalAmount || 0,
+          billToken: billToken || null
+        }
+      });
+    }
+
   } catch (error) {
-    console.error('❌ Handler error:', error);
+    console.error('❌ Invoice WhatsApp Handler Error:', error);
     
-    return res.status(500).json({
+    // Determine error type and appropriate response
+    let errorMessage = 'Failed to send invoice WhatsApp message';
+    let statusCode = 500;
+    let errorCode = 'UNKNOWN';
+    
+    if (error.message?.includes('fetch')) {
+      errorMessage = 'Failed to connect to Zoko WhatsApp API. Please check internet connection.';
+      statusCode = 503;
+      errorCode = 'NETWORK_ERROR';
+    } else if (error.message?.includes('timeout')) {
+      errorMessage = 'WhatsApp message request timed out. Please try again.';
+      statusCode = 504;
+      errorCode = 'TIMEOUT';
+    } else if (error.message?.includes('401') || error.message?.includes('403')) {
+      errorMessage = 'Zoko WhatsApp API authentication failed. Please check API key.';
+      statusCode = 401;
+      errorCode = 'AUTH_ERROR';
+    } else if (error.message?.includes('429')) {
+      errorMessage = 'Rate limit exceeded. Please try again later.';
+      statusCode = 429;
+      errorCode = 'RATE_LIMIT';
+    } else if (error.message) {
+      errorMessage = error.message;
+      errorCode = 'API_ERROR';
+    }
+    
+    return res.status(statusCode).json({
       success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
+      error: errorMessage,
+      errorCode: errorCode,
+      smsType: 'bill',
+      provider: 'Zoko WhatsApp',
+      channel: 'WhatsApp',
+      attemptedAt: new Date().toISOString(),
+      
+      invoiceContext: {
+        orderNumber: req.body.orderNumber,
+        totalAmount: req.body.totalAmount,
+        billToken: req.body.billToken
+      }
     });
   }
 }

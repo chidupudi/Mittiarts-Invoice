@@ -1,4 +1,4 @@
-// api/send-advance-sms.js - Zoko WhatsApp Implementation for Advance Payments
+// api/send-advance-sms.js - Zoko WhatsApp Implementation for Advance Payment Messages
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -102,28 +102,37 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create advance payment WhatsApp message
+    // Create advance payment WhatsApp message for pottery business
     const message = `🏺 *Mitti Arts - Advance Payment Received*
 
 Dear ${customerName.trim()},
 
-Thank you for your advance payment! 
+Thank you for your advance payment! Your pottery order is now confirmed. 🎨
 
 *Payment Details:*
 📋 Order: ${orderNumber.trim()}
 ✅ Advance Paid: *₹${advance.toFixed(2)}*
 ⏳ Balance Due: *₹${remaining.toFixed(2)}*
 
-*View & Download Invoice:*
+*View Your Advance Invoice:*
 ${billLink}
 
-Your handcrafted pottery order is now confirmed and will be ready soon!
+*Order Status:*
+🔥 Your handcrafted pottery is now in production
+📅 Estimated completion: 3-7 working days
+🎯 Balance payment due: ${remaining > 0 ? 'Before delivery' : 'Completed! ✅'}
 
-*Payment due in ${remaining > 0 ? '7 days for retail / 30 days for wholesale' : 'completed'}*
+*Payment Options for Balance:*
+💰 Cash at store pickup
+📱 UPI/Card payment
+🏦 Bank transfer available
 
-Contact us for any queries:
-📞 9441550927
+*Store Details:*
+📞 9441550927 / 7382150250
+🏪 Opp. Romoji Film City, Hyderabad
 📧 info@mittiarts.com
+
+We'll notify you when your pottery masterpiece is ready! 🏺
 
 *Mitti Arts Team*
 _Handcrafted with Love 🎨_`;
@@ -132,7 +141,7 @@ _Handcrafted with Love 🎨_`;
     console.log('📝 Message length:', message.length, 'characters');
     console.log('💰 Advance:', advance, 'Remaining:', remaining);
 
-    // Validate message length
+    // Validate message length for WhatsApp
     if (message.length > 4096) {
       return res.status(400).json({
         success: false,
@@ -204,14 +213,18 @@ _Handcrafted with Love 🎨_`;
           advanceAmount: advance,
           remainingAmount: remaining,
           totalAmount: advance + remaining,
-          advancePercentage: ((advance / (advance + remaining)) * 100).toFixed(1)
+          advancePercentage: ((advance / (advance + remaining)) * 100).toFixed(1),
+          orderNumber: orderNumber.trim(),
+          customerName: customerName.trim()
         },
         
         // WhatsApp specific data
         whatsappData: {
           messageId: data.id || data.message_id,
           status: data.status || 'sent',
-          recipient: whatsappNumber
+          recipient: whatsappNumber,
+          messageType: 'text',
+          characters: message.length
         }
       });
     } else {

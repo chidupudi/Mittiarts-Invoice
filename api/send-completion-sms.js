@@ -1,4 +1,4 @@
-// api/send-completion-sms.js - Complete Zoko WhatsApp Implementation for Payment Completion
+// api/send-completion-sms.js - Zoko WhatsApp Implementation for Payment Completion Messages
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -91,12 +91,12 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create payment completion WhatsApp message
+    // Create payment completion WhatsApp message for pottery business
     const message = `🎉 *Mitti Arts - Payment Completed!*
 
 Dear ${customerName.trim()},
 
-Congratulations! Your payment has been completed successfully.
+Congratulations! Your payment has been completed successfully. 💰✅
 
 *Order Details:*
 📋 Order: ${orderNumber.trim()}
@@ -106,28 +106,42 @@ Congratulations! Your payment has been completed successfully.
 *Download Final Invoice:*
 ${billLink}
 
-🏺 *Your handcrafted pottery order is ready for delivery/pickup!*
+🏺 *Your handcrafted pottery order is ready for pickup/delivery!*
 
 *Next Steps:*
-• Your order is now ready
-• Please collect at your convenience
-• Bring this message for reference
+🎯 Your pottery masterpiece is ready
+📦 Please collect at your convenience
+🕒 Store timings: 9 AM - 8 PM
+📝 Bring this message for reference
+
+*Collection Details:*
+🏪 *Mitti Arts Showroom*
+📍 Opp. Romoji Film City, Main Gate
+📍 Near Maisamma Temple, Hyderabad
+📞 Call before visit: 9441550927 / 7382150250
+
+*Care Instructions:*
+💧 Handle pottery with care
+🌿 Eco-friendly - made with love
+🎨 Perfect for home decoration
 
 Thank you for choosing Mitti Arts and supporting traditional Indian pottery craftsmanship! 🙏
 
-Contact us:
-📞 9441550927
-📧 info@mittiarts.com
-🏪 Opp. Romoji Film City, Hyderabad
+*Share Your Experience:*
+📸 Tag us in your pottery photos
+⭐ Leave a review to help others
+🔄 Recommend us to friends & family
 
 *Mitti Arts Team*
-_Handcrafted with Love 🎨_`;
+_Handcrafted with Love 🎨_
+
+*Visit again for more beautiful pottery creations!* 🏺`;
 
     console.log('📱 Sending completion WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
     console.log('📝 Message length:', message.length, 'characters');
     console.log('💰 Final payment:', finalPayment);
 
-    // Validate message length
+    // Validate message length for WhatsApp
     if (message.length > 4096) {
       return res.status(400).json({
         success: false,
@@ -200,7 +214,9 @@ _Handcrafted with Love 🎨_`;
           orderNumber: orderNumber.trim(),
           paymentStatus: 'COMPLETED',
           completionTime: new Date().toISOString(),
-          invoiceGenerated: !!billToken
+          invoiceGenerated: !!billToken,
+          customerName: customerName.trim(),
+          readyForPickup: true
         },
         
         // WhatsApp specific data
@@ -212,11 +228,13 @@ _Handcrafted with Love 🎨_`;
           characters: message.length
         },
 
-        // Additional Zoko response data
-        zokoResponse: {
-          requestId: data.id || data.message_id,
-          returnStatus: data.success || true,
-          timestamp: data.timestamp || new Date().toISOString()
+        // Store information for customer
+        storeInfo: {
+          name: 'Mitti Arts Showroom',
+          address: 'Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad',
+          phone: '9441550927 / 7382150250',
+          timings: '9 AM - 8 PM',
+          email: 'info@mittiarts.com'
         }
       });
     } else {
@@ -307,16 +325,6 @@ _Handcrafted with Love 🎨_`;
         orderNumber: req.body.orderNumber,
         billToken: req.body.billToken
       },
-
-      // Debugging information (only in development)
-      ...(process.env.NODE_ENV === 'development' && {
-        debug: {
-          originalError: error.message,
-          stack: error.stack,
-          requestBody: req.body,
-          headers: req.headers
-        }
-      }),
 
       // Troubleshooting guide
       troubleshooting: {

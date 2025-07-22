@@ -33,7 +33,6 @@ export default async function handler(req, res) {
     // Zoko WhatsApp API Configuration
     const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
     const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
-    const ZOKO_STATUS_URL = 'https://api.zoko.io/v2/account/profile'; // For checking account status
 
     // Basic health check data
     const healthCheck = {
@@ -129,7 +128,7 @@ export default async function handler(req, res) {
       protocol: req.headers['x-forwarded-proto'] || 'unknown'
     };
 
-    // Zoko Service Status Check (optional connectivity test)
+    // Zoko Service Status Check
     let zokoStatus = {
       reachable: 'unknown',
       message: 'Service status not tested in basic health check'
@@ -140,8 +139,8 @@ export default async function handler(req, res) {
       try {
         console.log('🧪 Testing Zoko WhatsApp API connectivity...');
         
-        // Test account profile endpoint (safer than sending a message)
-        const testResponse = await fetch(ZOKO_STATUS_URL, {
+        // Test with a simple API call to check if Zoko is responding
+        const testResponse = await fetch('https://api.zoko.io/v2/account/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${ZOKO_API_KEY}`,
@@ -151,25 +150,40 @@ export default async function handler(req, res) {
           }
         });
 
+        const testTime = Date.now() - startTime;
+
         if (testResponse.ok) {
-          const testData = await testResponse.json();
-          zokoStatus = {
-            reachable: true,
-            status: 'api_responding',
-            message: 'Zoko WhatsApp API is responding',
-            responseTime: `${Date.now() - startTime}ms`,
-            accountInfo: {
-              accountId: testData.id || 'available',
-              businessName: testData.business_name || 'Mitti Arts',
-              whatsappStatus: testData.whatsapp_status || 'connected'
-            }
-          };
+          try {
+            const testData = await testResponse.json();
+            zokoStatus = {
+              reachable: true,
+              status: 'api_responding',
+              message: 'Zoko WhatsApp API is responding correctly',
+              responseTime: `${testTime}ms`,
+              httpStatus: testResponse.status,
+              accountInfo: {
+                accountConnected: true,
+                businessName: testData.business_name || 'Mitti Arts',
+                whatsappStatus: testData.whatsapp_status || 'connected',
+                accountId: testData.id ? 'available' : 'unknown'
+              }
+            };
+          } catch (jsonError) {
+            zokoStatus = {
+              reachable: true,
+              status: 'api_responding_no_json',
+              message: 'Zoko API responding but response format unexpected',
+              responseTime: `${testTime}ms`,
+              httpStatus: testResponse.status
+            };
+          }
         } else {
           zokoStatus = {
             reachable: false,
             status: 'connection_failed',
             message: `Zoko WhatsApp API returned HTTP ${testResponse.status}`,
-            httpStatus: testResponse.status
+            httpStatus: testResponse.status,
+            responseTime: `${testTime}ms`
           };
         }
       } catch (testError) {
@@ -177,7 +191,8 @@ export default async function handler(req, res) {
           reachable: false,
           status: 'connection_error',
           message: `Failed to connect to Zoko WhatsApp API: ${testError.message}`,
-          error: testError.message
+          error: testError.message,
+          errorType: testError.name
         };
       }
     }
@@ -185,7 +200,7 @@ export default async function handler(req, res) {
     // Determine overall health status
     let overallStatus = 'healthy';
     let statusCode = 200;
-    let healthMessage = 'All systems operational';
+    let healthMessage = 'All systems operational for Mitti Arts WhatsApp messaging';
 
     if (!ZOKO_API_KEY) {
       overallStatus = 'degraded';
@@ -221,7 +236,7 @@ export default async function handler(req, res) {
       usage: {
         message: 'Mitti Arts WhatsApp Messaging API powered by Zoko is operational',
         documentation: 'Send POST requests to WhatsApp endpoints with required parameters',
-        support: 'Contact: info@mittiarts.com',
+        support: 'Contact: info@mittiarts.com or 9441550927',
         testConnection: 'Add ?testConnection=true to test Zoko WhatsApp connectivity'
       },
 
@@ -246,15 +261,24 @@ export default async function handler(req, res) {
         businessType: 'Handcrafted Pottery & Terracotta Art',
         location: 'Hyderabad, Telangana, India',
         contact: '9441550927 / 7382150250',
+        email: 'info@mittiarts.com',
+        address: 'Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad',
         whatsappTypes: [
           'Invoice/Bill WhatsApp Messages',
           'Advance Payment WhatsApp Messages', 
           'Payment Completion WhatsApp Messages',
-          'Order Reminder WhatsApp Messages'
+          'Order Status WhatsApp Messages'
         ],
         targetMarket: 'Indian pottery and handicraft customers',
         phoneFormat: 'Indian mobile numbers (10 digits starting with 6, 7, 8, or 9)',
-        messagingSystem: 'WhatsApp Business messages for pottery orders with invoice links'
+        messagingSystem: 'WhatsApp Business messages for pottery orders with invoice links',
+        specialFeatures: [
+          'Pottery-themed messaging with emojis',
+          'Advance payment tracking',
+          'Order completion notifications',
+          'Store pickup instructions',
+          'Care instructions for pottery items'
+        ]
       },
 
       // API metrics and monitoring
@@ -265,7 +289,9 @@ export default async function handler(req, res) {
         apiVersion: healthCheck.version,
         lastHealthCheck: healthCheck.timestamp,
         whatsappChannel: 'Enabled',
-        messagingProvider: 'Zoko'
+        messagingProvider: 'Zoko',
+        testConnectionAvailable: true,
+        supportedMessageTypes: ['Invoice', 'Advance Payment', 'Payment Completion', 'Custom']
       }
     };
 
@@ -306,15 +332,21 @@ export default async function handler(req, res) {
           'Server overload',
           'Memory issues',
           'Network connectivity problems',
-          'Zoko WhatsApp API issues'
+          'Zoko WhatsApp API issues',
+          'Invalid API configuration'
         ],
         recommendations: [
           'Check server resources',
-          'Verify Zoko WhatsApp API status',
+          'Verify Zoko WhatsApp API status at zoko.io',
           'Review error logs',
+          'Test with ?testConnection=true parameter',
           'Contact system administrator'
         ],
-        support: 'info@mittiarts.com'
+        support: {
+          mittiArts: 'info@mittiarts.com',
+          phone: '9441550927',
+          zoko: 'https://zoko.io/support'
+        }
       }
     };
     
