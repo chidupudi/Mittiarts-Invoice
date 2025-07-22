@@ -1,4 +1,4 @@
-// api/send-sms.js - Zoko WhatsApp Template Message + Fast2SMS Fallback
+// api/send-sms.js - Zoko WhatsApp Template Message + Fast2SMS Fallback (FIXED)
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -63,20 +63,22 @@ export default async function handler(req, res) {
 
     console.log('📱 Attempting Zoko WhatsApp Template Message...');
 
+    // Zoko configuration (declared outside try block for error handling)
+    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
+    const ZOKO_API_URL = 'https://chat.zoko.io/v2/message';
+    const TEMPLATE_ID = 'order_inovice'; // Fixed: Your template ID
+    const whatsappNumber = `91${cleanNumber}`;
+
     // Try Zoko WhatsApp Template Message first
     try {
-      const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
-      const ZOKO_API_URL = 'https://chat.zoko.io/v2/message';
-      const TEMPLATE_ID = 'order_inovice'; // Your template ID
-      const whatsappNumber = `91${cleanNumber}`;
 
       // Prepare template arguments in correct order
       // Template: {{1}} = Customer Name, {{2}} = Order Number, {{3}} = Amount, {{4}} = Invoice Link
       const templateArgs = [
-        customerName.trim(),           // {{1}} - Customer Name
-        orderNumber.trim(),            // {{2}} - Order Number  
-        `${(totalAmount || 0).toFixed(2)}`, // {{3}} - Amount
-        billLink                       // {{4}} - Invoice Link
+        customerName.trim(),                    // {{1}} - Customer Name
+        orderNumber.trim(),                     // {{2}} - Order Number  
+        String((totalAmount || 0).toFixed(2)),  // {{3}} - Amount (ensure string)
+        billLink                                // {{4}} - Invoice Link
       ];
 
       // Zoko Template Message Payload (based on documentation)
@@ -190,7 +192,7 @@ Contact: 9441550927
             billLink: billLink,
             cost: 'SMS pricing',
             fallbackReason: 'Zoko WhatsApp template failed',
-            templateAttempted: TEMPLATE_ID
+            templateAttempted: 'order_inovice'
           });
         }
 
@@ -206,7 +208,7 @@ Contact: 9441550927
           attempts: [
             {
               provider: 'Zoko WhatsApp Template',
-              templateId: TEMPLATE_ID,
+              templateId: 'order_inovice',
               endpoint: ZOKO_API_URL,
               error: zokoError.message,
               timestamp: new Date().toISOString()
@@ -219,14 +221,19 @@ Contact: 9441550927
           ],
           troubleshooting: {
             zokoTemplate: {
-              templateId: TEMPLATE_ID,
-              templateArgs: templateArgs,
+              templateId: 'order_inovice',
+              templateArgs: [
+                customerName.trim(),
+                orderNumber.trim(),
+                String((totalAmount || 0).toFixed(2)),
+                billLink
+              ],
               note: 'Template message attempted but failed'
             },
             possibleIssues: [
               'Template not approved by WhatsApp yet',
-              'Template ID mismatch',
-              'Template arguments count mismatch',
+              'Template ID mismatch - check spelling: order_inovice',
+              'Template arguments count mismatch (needs exactly 4)',
               'Zoko account or API key issues'
             ],
             recommendations: [
