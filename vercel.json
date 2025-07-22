@@ -16,10 +16,6 @@
     "api/status.js": {
       "memory": 128,
       "maxDuration": 10
-    },
-    "api/test.js": {
-      "memory": 128,
-      "maxDuration": 10
     }
   },
   "env": {
