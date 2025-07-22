@@ -1,4 +1,4 @@
-// api/send-sms.js - CORRECTED Zoko WhatsApp API with proper endpoint and authentication
+// api/send-sms.js - Zoko WhatsApp Template Message + Fast2SMS Fallback
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('📱 Corrected Zoko WhatsApp Invoice Message Request:', {
+    console.log('📱 Zoko Template + Fast2SMS Invoice Message Request:', {
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
@@ -61,81 +61,80 @@ export default async function handler(req, res) {
       ? `${origin}/public/invoice/${billToken}` 
       : `${origin}`;
 
-    // Create WhatsApp message for Zoko
-    const whatsappMessage = `🏺 *Mitti Arts - Invoice Generated*
+    console.log('📱 Attempting Zoko WhatsApp Template Message...');
 
-Dear ${customerName.trim()},
-
-Thank you for choosing our handcrafted pottery! 
-
-*Order Details:*
-📋 Order Number: ${orderNumber.trim()}
-💰 Amount: ₹${(totalAmount || 0).toFixed(2)}
-
-*View & Download Your Invoice:*
-${billLink}
-
-Your beautiful pottery pieces are ready! 🎨
-
-*Contact & Location:*
-📞 9441550927 / 7382150250
-🏪 Opp. Romoji Film City, Hyderabad
-📧 info@mittiarts.com
-
-*Mitti Arts Team*
-_Handcrafted with Love 🎨_`;
-
-    console.log('📱 Attempting Corrected Zoko WhatsApp API...');
-
-    // Try Corrected Zoko WhatsApp API first
+    // Try Zoko WhatsApp Template Message first
     try {
       const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
-      const ZOKO_API_URL = 'https://chat.zoko.io/v2/message'; // CORRECTED URL
+      const ZOKO_API_URL = 'https://chat.zoko.io/v2/message';
+      const TEMPLATE_ID = 'order_inovice'; // Your template ID
       const whatsappNumber = `91${cleanNumber}`;
 
-      // CORRECTED Payload Format (based on Zoko docs)
+      // Prepare template arguments in correct order
+      // Template: {{1}} = Customer Name, {{2}} = Order Number, {{3}} = Amount, {{4}} = Invoice Link
+      const templateArgs = [
+        customerName.trim(),           // {{1}} - Customer Name
+        orderNumber.trim(),            // {{2}} - Order Number  
+        `${(totalAmount || 0).toFixed(2)}`, // {{3}} - Amount
+        billLink                       // {{4}} - Invoice Link
+      ];
+
+      // Zoko Template Message Payload (based on documentation)
       const zokoPayload = {
         channel: 'whatsapp',
         recipient: whatsappNumber,
-        type: 'text',
-        message: whatsappMessage  // Direct message field, not nested
+        type: 'template',              // Template message type
+        templateId: TEMPLATE_ID,       // Your template ID
+        templateArgs: templateArgs     // Array of values for {{1}}, {{2}}, {{3}}, {{4}}
       };
 
-      console.log('📡 Calling CORRECTED Zoko WhatsApp API...');
-      console.log('🔧 Using endpoint:', ZOKO_API_URL);
+      console.log('📡 Calling Zoko WhatsApp Template API...');
+      console.log('🔧 Template ID:', TEMPLATE_ID);
       console.log('📱 Recipient:', whatsappNumber);
+      console.log('📋 Template Args:', templateArgs);
 
       const zokoResponse = await fetch(ZOKO_API_URL, {
         method: 'POST',
         headers: {
           'accept': 'application/json',
           'content-type': 'application/json',
-          'apikey': ZOKO_API_KEY  // CORRECTED Header format
+          'apikey': ZOKO_API_KEY
         },
         body: JSON.stringify(zokoPayload)
       });
 
-      console.log('📊 Corrected Zoko Response Status:', zokoResponse.status);
+      console.log('📊 Zoko Template Response Status:', zokoResponse.status);
 
       if (zokoResponse.ok) {
         const zokoData = await zokoResponse.json();
-        console.log('📊 Corrected Zoko Response Data:', zokoData);
+        console.log('📊 Zoko Template Response Data:', zokoData);
 
         // Check for success in Zoko response
         if (zokoData && (zokoData.success !== false)) {
-          console.log('✅ Success with CORRECTED Zoko WhatsApp API');
+          console.log('✅ SUCCESS with Zoko WhatsApp Template Message');
           
           return res.status(200).json({
             success: true,
             messageId: zokoData.id || zokoData.messageId || Date.now().toString(),
-            message: 'WhatsApp message sent successfully via Corrected Zoko API',
-            provider: 'Zoko WhatsApp (Corrected)',
+            message: 'WhatsApp template message sent successfully via Zoko',
+            provider: 'Zoko WhatsApp Template',
             channel: 'WhatsApp',
             sentAt: new Date().toISOString(),
             phoneNumber: `+91${cleanNumber}`,
             whatsappNumber: whatsappNumber,
             billLink: billLink,
             cost: 'Per message pricing',
+            
+            // Template specific data
+            templateInfo: {
+              templateId: TEMPLATE_ID,
+              templateArgs: templateArgs,
+              customerName: customerName.trim(),
+              orderNumber: orderNumber.trim(),
+              amount: (totalAmount || 0).toFixed(2),
+              invoiceLink: billLink
+            },
+            
             zokoResponse: zokoData
           });
         }
@@ -143,11 +142,11 @@ _Handcrafted with Love 🎨_`;
 
       // If Zoko fails, get response text for debugging
       const errorText = await zokoResponse.text();
-      console.log('❌ Corrected Zoko API failed:', zokoResponse.status, errorText);
-      throw new Error(`Corrected Zoko API returned status ${zokoResponse.status}: ${errorText}`);
+      console.log('❌ Zoko Template API failed:', zokoResponse.status, errorText);
+      throw new Error(`Zoko Template API returned status ${zokoResponse.status}: ${errorText}`);
 
     } catch (zokoError) {
-      console.log('❌ Corrected Zoko WhatsApp failed:', zokoError.message);
+      console.log('❌ Zoko WhatsApp Template failed:', zokoError.message);
       console.log('🔄 Falling back to Fast2SMS...');
       
       // Fallback to Fast2SMS
@@ -183,15 +182,15 @@ Contact: 9441550927
           return res.status(200).json({
             success: true,
             messageId: fast2smsData.request_id,
-            message: 'SMS sent successfully via Fast2SMS (fallback after Zoko correction attempt)',
+            message: 'SMS sent successfully via Fast2SMS (fallback after Zoko template attempt)',
             provider: 'Fast2SMS (Fallback)',
             channel: 'SMS',
             sentAt: new Date().toISOString(),
             phoneNumber: `+91${cleanNumber}`,
             billLink: billLink,
             cost: 'SMS pricing',
-            fallbackReason: 'Corrected Zoko WhatsApp still unavailable',
-            zokoAttempt: 'Corrected API format attempted'
+            fallbackReason: 'Zoko WhatsApp template failed',
+            templateAttempted: TEMPLATE_ID
           });
         }
 
@@ -206,8 +205,9 @@ Contact: 9441550927
           error: 'All messaging providers are currently unavailable',
           attempts: [
             {
-              provider: 'Zoko WhatsApp (Corrected API)',
-              endpoint: 'https://chat.zoko.io/v2/message',
+              provider: 'Zoko WhatsApp Template',
+              templateId: TEMPLATE_ID,
+              endpoint: ZOKO_API_URL,
               error: zokoError.message,
               timestamp: new Date().toISOString()
             },
@@ -218,22 +218,27 @@ Contact: 9441550927
             }
           ],
           troubleshooting: {
-            zokoCorrections: [
-              'Used correct endpoint: https://chat.zoko.io/v2/message',
-              'Used correct header format: apikey instead of Authorization Bearer',
-              'Used correct payload format: direct message field',
-              'Still experiencing connectivity issues'
+            zokoTemplate: {
+              templateId: TEMPLATE_ID,
+              templateArgs: templateArgs,
+              note: 'Template message attempted but failed'
+            },
+            possibleIssues: [
+              'Template not approved by WhatsApp yet',
+              'Template ID mismatch',
+              'Template arguments count mismatch',
+              'Zoko account or API key issues'
             ],
-            nextSteps: [
-              'Verify Zoko account is active and API key is valid',
-              'Check if WhatsApp number is properly configured in Zoko',
-              'Contact Zoko support for API connectivity issues',
-              'Fast2SMS working as reliable backup'
+            recommendations: [
+              'Check if template is approved in Zoko dashboard',
+              'Verify template ID spelling: order_inovice',
+              'Ensure template has 4 variables {{1}}, {{2}}, {{3}}, {{4}}',
+              'Contact Zoko support if template is approved but still failing'
             ]
           },
           fallbackOptions: {
             manual: {
-              whatsappLink: `https://wa.me/91${cleanNumber}?text=${encodeURIComponent(whatsappMessage)}`,
+              whatsappLink: `https://wa.me/91${cleanNumber}?text=${encodeURIComponent(`Mitti Arts Invoice - Order: ${orderNumber.trim()}, Amount: ₹${(totalAmount || 0).toFixed(2)}, Invoice: ${billLink}`)}`,
               customerPhone: `+91${cleanNumber}`
             }
           }
