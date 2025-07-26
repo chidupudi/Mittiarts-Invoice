@@ -1,4 +1,4 @@
-// src/components/public/PublicInvoice.js - Complete Updated Component
+// src/components/public/PublicInvoice.js - Clean Mitti Arts Style
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -11,23 +11,16 @@ import {
   Alert,
   Space,
   Tag,
-  Descriptions,
-  Table,
-  Divider,
-  message,
-  Result
+  Result,
+  message
 } from 'antd';
 import { 
   DownloadOutlined, 
   CheckCircleOutlined,
   PhoneOutlined,
-  EnvironmentOutlined,
-  MailOutlined,
-  HomeOutlined,
-  ClockCircleOutlined,
   PrinterOutlined,
   SafetyCertificateOutlined,
-  ExclamationCircleOutlined
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -36,15 +29,192 @@ import firebaseService from '../../services/firebaseService';
 
 const { Title, Text } = Typography;
 
-// Store information
+// Store Information
 const MAIN_STORE_INFO = {
-  name: 'ART OF INDIAN POTTERY (Mitti arts)',
-  address: 'Outlet: Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad.',
-  phone: '9441550927 / 7382150250',
-  gst: '36AMMPG0091P1ZN',
-  email: 'info@mittiarts.com',
-  website: 'www.mittiarts.com'
+  name: 'ART OF INDIAN POTTERY',
+  subtitle: 'Mfr: Pottery Articulture, Eco-Ganesha, Eco-Filters, Cooking Pots, Diyas, Terracotta, Sculptures, and all types of art works',
+  address: 'Studio: Opp. Ramoji Film City Main Gate, Near Maisamma Temple, Abdullapurmet (Vill. & Mdl.), Ranga Reddy Dist. - 501 505, Telangana.',
+  email: 'mittiarts@gmail.com',
+  website: 'www.mittiarts.com',
+  phone: '8885515554, 9441550927, 7382150250',
+  gstin: '36AMMPG0091P1ZN',
+  logo: 'https://ik.imagekit.io/mittiarts/Logo%20final%20jpg.jpg?updatedAt=1753566864506'
 };
+
+const invoiceStyles = `
+  @media print {
+    body { margin: 0; }
+    .no-print { display: none !important; }
+  }
+  
+  .invoice-container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border: 2px solid #000;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+  }
+  
+  .invoice-header {
+    text-align: center;
+    padding: 15px;
+    border-bottom: 1px solid #000;
+  }
+  
+  .logo-container {
+    width: 60px;
+    height: 60px;
+    border: 1px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  
+  .logo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  .company-name {
+    font-size: 20px;
+    font-weight: bold;
+    margin: 5px 0;
+    color: #8b4513;
+  }
+  
+  .company-details {
+    font-size: 10px;
+    margin: 2px 0;
+    line-height: 1.3;
+  }
+  
+  .invoice-title {
+    text-align: center;
+    padding: 8px;
+    border-bottom: 1px solid #000;
+    font-weight: bold;
+    background-color: #f0f0f0;
+    font-size: 16px;
+  }
+  
+  .gstin-section {
+    text-align: center;
+    padding: 5px;
+    border-bottom: 1px solid #000;
+    font-weight: bold;
+  }
+  
+  .invoice-info {
+    display: flex;
+    padding: 10px;
+    border-bottom: 1px solid #000;
+  }
+  
+  .invoice-details {
+    flex: 1;
+    border-right: 1px solid #000;
+    padding-right: 10px;
+  }
+  
+  .customer-details {
+    flex: 1;
+    padding-left: 10px;
+  }
+  
+  .customer-section {
+    padding: 10px;
+    border-bottom: 1px solid #000;
+    text-align: right;
+  }
+  
+  .advance-alert {
+    padding: 10px;
+    background-color: #fff7e6;
+    border-bottom: 1px solid #000;
+    text-align: center;
+    border-left: 4px solid #fa8c16;
+  }
+  
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .items-table th,
+  .items-table td {
+    border: 1px solid #000;
+    padding: 8px 5px;
+    text-align: left;
+    font-size: 11px;
+  }
+  
+  .items-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    text-align: center;
+  }
+  
+  .text-center { text-align: center; }
+  .text-right { text-align: right; }
+  
+  .totals-section {
+    display: flex;
+    min-height: 100px;
+  }
+  
+  .amount-words {
+    flex: 1;
+    border-right: 1px solid #000;
+    padding: 15px;
+  }
+  
+  .totals-column {
+    width: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  
+  .signature-section {
+    text-align: right;
+    padding: 25px;
+    border-top: 1px solid #000;
+  }
+  
+  .footer {
+    text-align: center;
+    padding: 15px;
+    border-top: 1px solid #000;
+    background-color: #333;
+    color: white;
+    font-size: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+  }
+  
+  .qr-container {
+    width: 80px;
+    height: 80px;
+    background: white;
+    border: 1px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .qr-image {
+    width: 70px;
+    height: 70px;
+  }
+`;
 
 const PublicInvoice = () => {
   const { token } = useParams();
@@ -52,7 +222,6 @@ const PublicInvoice = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
-  const [accessInfo, setAccessInfo] = useState(null);
 
   useEffect(() => {
     if (token) {
@@ -68,49 +237,65 @@ const PublicInvoice = () => {
       setLoading(true);
       setError(null);
 
-      console.log('🔍 Accessing public invoice with token:', token?.slice(0, 10) + '...');
-
-      // Get client IP (basic implementation)
       const clientIp = getClientIP();
-
-      // Use your updated firebaseService method
       const orderData = await firebaseService.getOrderByBillToken(token, clientIp);
-
       setOrder(orderData);
-      
-      // Set access info for display
-      setAccessInfo({
-        accessTime: new Date().toLocaleString(),
-        tokenStatus: 'Valid',
-        secured: true
-      });
-
-      console.log('✅ Public invoice loaded successfully:', orderData.orderNumber);
     } catch (err) {
-      console.error('❌ Error accessing public invoice:', err);
+      console.error('Error accessing public invoice:', err);
       setError(err.message);
-      
-      // Set error info
-      setAccessInfo({
-        accessTime: new Date().toLocaleString(),
-        tokenStatus: getErrorType(err.message),
-        secured: true
-      });
     } finally {
       setLoading(false);
     }
   };
 
   const getClientIP = () => {
-    // Simple implementation - in production you might want more sophisticated IP detection
     return 'unknown';
   };
 
-  const getErrorType = (errorMessage) => {
-    if (errorMessage.includes('expired')) return 'Expired';
-    if (errorMessage.includes('Too many requests')) return 'Rate Limited';
-    if (errorMessage.includes('Invalid invoice link format')) return 'Invalid Format';
-    return 'Not Found';
+  // Convert number to words
+  const numberToWords = (amount) => {
+    if (amount === 0) return "Zero Rupees Only";
+    
+    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+    const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    
+    const convertHundreds = (num) => {
+      let result = "";
+      if (num > 99) {
+        result += ones[Math.floor(num / 100)] + " Hundred ";
+        num %= 100;
+      }
+      if (num > 19) {
+        result += tens[Math.floor(num / 10)] + " ";
+        num %= 10;
+      } else if (num > 9) {
+        result += teens[num - 10] + " ";
+        return result;
+      }
+      if (num > 0) {
+        result += ones[num] + " ";
+      }
+      return result;
+    };
+    
+    const integerPart = Math.floor(amount);
+    let words = "";
+    
+    if (integerPart > 99999) {
+      words += convertHundreds(Math.floor(integerPart / 100000)) + "Lakh ";
+      integerPart %= 100000;
+    }
+    
+    if (integerPart > 999) {
+      words += convertHundreds(Math.floor(integerPart / 1000)) + "Thousand ";
+      integerPart %= 1000;
+    }
+    
+    words += convertHundreds(integerPart);
+    words += "Rupees Only";
+    
+    return words;
   };
 
   const handleDownloadPDF = async () => {
@@ -129,9 +314,7 @@ const PublicInvoice = () => {
         scale: 2,
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: element.scrollWidth,
-        height: element.scrollHeight
+        backgroundColor: '#ffffff'
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -171,54 +354,8 @@ const PublicInvoice = () => {
   };
 
   const handleContactUs = () => {
-    window.location.href = `tel:${MAIN_STORE_INFO.phone.split(' / ')[0]}`;
+    window.location.href = `tel:${MAIN_STORE_INFO.phone.split(', ')[0]}`;
   };
-
-  const itemColumns = [
-    {
-      title: '#',
-      width: 50,
-      render: (_, __, index) => index + 1,
-    },
-    {
-      title: 'Pottery Product',
-      dataIndex: ['product', 'name'],
-      key: 'product',
-      render: (name) => (
-        <Space>
-          <span style={{ fontSize: '16px' }}>🏺</span>
-          <Text strong>{name}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: 'Quantity',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      width: 80,
-      align: 'center',
-      render: (qty) => <Tag color="#8b4513">{qty}</Tag>
-    },
-    {
-      title: 'Unit Price',
-      dataIndex: 'price',
-      key: 'price',
-      width: 100,
-      align: 'right',
-      render: (price) => `₹${price.toFixed(2)}`,
-    },
-    {
-      title: 'Total',
-      key: 'total',
-      width: 100,
-      align: 'right',
-      render: (_, record) => (
-        <Text strong style={{ color: '#8b4513' }}>
-          ₹{(record.price * record.quantity).toFixed(2)}
-        </Text>
-      ),
-    },
-  ];
 
   // Loading state
   if (loading) {
@@ -280,34 +417,6 @@ const PublicInvoice = () => {
                   style={{ marginBottom: 16, textAlign: 'left' }}
                 />
                 
-                {accessInfo && (
-                  <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }}>
-                    <Row gutter={16}>
-                      <Col span={8}>
-                        <Text type="secondary">Access Time:</Text>
-                        <div style={{ fontSize: '12px' }}>{accessInfo.accessTime}</div>
-                      </Col>
-                      <Col span={8}>
-                        <Text type="secondary">Token Status:</Text>
-                        <div>
-                          <Tag color={
-                            accessInfo.tokenStatus === 'Valid' ? 'green' :
-                            accessInfo.tokenStatus === 'Expired' ? 'orange' : 'red'
-                          }>
-                            {accessInfo.tokenStatus}
-                          </Tag>
-                        </div>
-                      </Col>
-                      <Col span={8}>
-                        <Text type="secondary">Security:</Text>
-                        <div>
-                          <SafetyCertificateOutlined style={{ color: '#52c41a' }} /> Protected
-                        </div>
-                      </Col>
-                    </Row>
-                  </Card>
-                )}
-
                 <div style={{ marginTop: 16, fontSize: '14px', color: '#666', textAlign: 'left' }}>
                   <Title level={5}>What you can do:</Title>
                   <ul style={{ paddingLeft: '20px' }}>
@@ -357,15 +466,19 @@ const PublicInvoice = () => {
     return null;
   }
 
+  const finalTotal = order.total || 0;
+
   return (
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       padding: '20px'
     }}>
+      <style>{invoiceStyles}</style>
+      
       {/* Header with download button */}
       <div style={{ maxWidth: '800px', margin: '0 auto', marginBottom: '20px' }}>
-        <Card style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(139, 69, 19, 0.15)' }}>
+        <Card style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(139, 69, 19, 0.15)' }} className="no-print">
           <Row justify="space-between" align="middle">
             <Col>
               <Space>
@@ -429,244 +542,229 @@ const PublicInvoice = () => {
 
       {/* Invoice Content */}
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        <Card 
-          id="invoice-content"
-          style={{ borderRadius: '12px', boxShadow: '0 8px 24px rgba(139, 69, 19, 0.1)' }}
-        >
+        <div id="invoice-content" className="invoice-container">
+          
           {/* Header */}
-          <div style={{
-            background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
-            color: 'white',
-            padding: '30px',
-            margin: '-24px -24px 24px -24px',
-            borderRadius: '12px 12px 0 0'
-          }}>
-            <Row justify="space-between" align="middle">
-              <Col>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    background: 'white',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#8b4513',
-                    fontSize: '28px'
-                  }}>
-                    🏺
-                  </div>
-                  <div>
-                    <Title level={2} style={{ margin: 0, color: 'white' }}>
-                      {MAIN_STORE_INFO.name}
-                    </Title>
-                    <Text style={{ color: 'rgba(255,255,255,0.9)' }}>
-                      Handcrafted Pottery & Terracotta Art
-                    </Text>
-                  </div>
-                </div>
-              </Col>
-              <Col>
-                <div style={{ textAlign: 'right' }}>
-                  <Title level={2} style={{ margin: 0, color: 'white' }}>INVOICE</Title>
-                  <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '16px' }}>
-                    #{order.orderNumber}
-                  </Text>
-                </div>
-              </Col>
-            </Row>
+          <div className="invoice-header">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
+              <div className="logo-container">
+                <img 
+                  src={MAIN_STORE_INFO.logo} 
+                  alt="Mitti Arts Logo" 
+                  className="logo-image"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div style={{ display: 'none', fontSize: '24px', color: '#8b4513' }}>🏺</div>
+              </div>
+              <div>
+                <div className="company-name">{MAIN_STORE_INFO.name}</div>
+                <div className="company-details">{MAIN_STORE_INFO.subtitle}</div>
+              </div>
+            </div>
+            <div className="company-details" style={{ marginTop: '10px' }}>
+              {MAIN_STORE_INFO.address}
+            </div>
+            <div className="company-details" style={{ marginTop: '5px' }}>
+              E-mail: {MAIN_STORE_INFO.email}, {MAIN_STORE_INFO.website}
+            </div>
+            <div className="company-details">
+              Cell: {MAIN_STORE_INFO.phone}
+            </div>
           </div>
 
-          {/* Store & Customer Info */}
-          <Row gutter={24} style={{ marginBottom: 24 }}>
-            <Col span={12}>
-              <Card size="small" title="From" style={{ height: '100%' }}>
-                <div style={{ fontSize: '14px' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: 8, color: '#8b4513' }}>
-                    {MAIN_STORE_INFO.name}
-                  </div>
-                  <div style={{ marginBottom: 6 }}>
-                    <EnvironmentOutlined style={{ marginRight: 6, color: '#8b4513' }} />
-                    {MAIN_STORE_INFO.address}
-                  </div>
-                  <div style={{ marginBottom: 6 }}>
-                    <PhoneOutlined style={{ marginRight: 6, color: '#8b4513' }} />
-                    {MAIN_STORE_INFO.phone}
-                  </div>
-                  <div style={{ marginBottom: 6 }}>
-                    <MailOutlined style={{ marginRight: 6, color: '#8b4513' }} />
-                    {MAIN_STORE_INFO.email}
-                  </div>
-                  <div>
-                    <strong>GST:</strong> {MAIN_STORE_INFO.gst}
-                  </div>
-                </div>
-              </Card>
-            </Col>
-            <Col span={12}>
-              <Card size="small" title="To" style={{ height: '100%' }}>
-                <div style={{ fontSize: '14px' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: 8, color: '#8b4513' }}>
-                    {order.customer?.name || 'Valued Customer'}
-                  </div>
-                  {order.customer?.phone && (
-                    <div style={{ marginBottom: 6 }}>
-                      <PhoneOutlined style={{ marginRight: 6, color: '#8b4513' }} />
-                      {order.customer.phone}
-                    </div>
-                  )}
-                  <div style={{ marginTop: 8 }}>
-                    <Tag color={order.businessType === 'wholesale' ? 'orange' : 'blue'}>
-                      {order.businessType === 'wholesale' ? 'Wholesale Customer' : 'Retail Customer'}
-                    </Tag>
-                  </div>
-                  {order.branchInfo?.name && (
-                    <div style={{ marginTop: 8 }}>
-                      <HomeOutlined style={{ marginRight: 6, color: '#8b4513' }} />
-                      <Text type="secondary">{order.branchInfo.name}</Text>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </Col>
-          </Row>
+          {/* TAX INVOICE Title */}
+          <div className="invoice-title">
+            TAX INVOICE
+          </div>
 
-          {/* Order Details */}
-          <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
-            <Descriptions.Item label="Invoice Date">
-              {moment(order.createdAt).format('DD MMMM YYYY')}
-            </Descriptions.Item>
-            <Descriptions.Item label="Payment Method">
-              <Tag color="green">{order.paymentMethod || 'Cash'}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Status">
-              <Tag 
-                color={order.remainingAmount > 0 ? 'orange' : 'green'} 
-                icon={order.remainingAmount > 0 ? <ClockCircleOutlined /> : <CheckCircleOutlined />}
-              >
-                {order.isAdvanceBilling && order.remainingAmount > 0 ? 'Partial Payment' : 'Paid'}
-              </Tag>
-            </Descriptions.Item>
-          </Descriptions>
+          {/* GSTIN */}
+          <div className="gstin-section">
+            GSTIN: {MAIN_STORE_INFO.gstin}
+          </div>
 
-          {/* Advance Payment Info */}
-          {order.isAdvanceBilling && (
-            <Alert
-              message={order.remainingAmount > 0 ? "Advance Payment Received" : "Payment Completed"}
-              description={
-                order.remainingAmount > 0 
-                  ? `This is an advance payment invoice. Advance paid: ₹${order.advanceAmount?.toFixed(2)}. Remaining balance: ₹${order.remainingAmount?.toFixed(2)}`
-                  : `All payments have been completed for this order. Thank you!`
-              }
-              type={order.remainingAmount > 0 ? "warning" : "success"}
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
+          {/* Invoice Details Section */}
+          <div className="invoice-info">
+            <div className="invoice-details">
+              <div><strong>P.O. No.</strong></div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
+            </div>
+            <div style={{ flex: 1, borderRight: '1px solid #000', borderLeft: '1px solid #000', paddingLeft: '10px', paddingRight: '10px' }}>
+              <div><strong>DC No.</strong></div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong></div>
+            </div>
+            <div className="customer-details">
+              <div><strong>Invoice No.</strong> {order.orderNumber}</div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
+            </div>
+          </div>
+
+          {/* Customer Details */}
+          <div className="customer-section">
+            <div><strong>M/s. {order.customer?.name || 'Walk-in Customer'}</strong></div>
+            {order.customer?.phone && (
+              <div style={{ marginTop: '5px' }}>Ph: {order.customer.phone}</div>
+            )}
+            <div style={{ marginTop: '10px' }}>
+              <strong>GSTIN: ________________________________</strong>
+            </div>
+          </div>
+
+          {/* Advance Payment Alert */}
+          {order.isAdvanceBilling && order.remainingAmount > 0 && (
+            <div className="advance-alert">
+              <strong style={{ color: '#fa8c16' }}>
+                ⚠️ ADVANCE PAYMENT INVOICE - Balance Due: ₹{order.remainingAmount?.toFixed(2)}
+              </strong>
+            </div>
           )}
 
           {/* Items Table */}
-          <Card title="Pottery Items Ordered" size="small" style={{ marginBottom: 24 }}>
-            <Table
-              columns={itemColumns}
-              dataSource={order.items || []}
-              pagination={false}
-              rowKey={(item, index) => `${item.product?.id || index}`}
-              size="small"
-              footer={() => (
-                <div style={{ textAlign: 'right' }}>
-                  <Row justify="end">
-                    <Col span={8}>
-                      <div style={{ padding: '16px 0' }}>
-                        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-                          <span>Subtotal:</span>
-                          <span>₹{order.subtotal?.toFixed(2) || '0.00'}</span>
-                        </div>
-                        {(order.discount > 0 || order.wholesaleDiscount > 0) && (
-                          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', color: '#fa8c16' }}>
-                            <span>Discount:</span>
-                            <span>-₹{((order.discount || 0) + (order.wholesaleDiscount || 0)).toFixed(2)}</span>
-                          </div>
-                        )}
-                        <Divider style={{ margin: '8px 0' }} />
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          fontSize: '18px', 
-                          fontWeight: 'bold',
-                          color: '#8b4513'
-                        }}>
-                          <span>Total Amount:</span>
-                          <span>₹{order.total?.toFixed(2) || '0.00'}</span>
-                        </div>
-                        {order.isAdvanceBilling && order.remainingAmount > 0 && (
-                          <>
-                            <Divider style={{ margin: '8px 0' }} />
-                            <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', color: '#52c41a' }}>
-                              <span>Advance Paid:</span>
-                              <span>₹{order.advanceAmount?.toFixed(2) || '0.00'}</span>
-                            </div>
-                            <div style={{ 
-                              display: 'flex', 
-                              justifyContent: 'space-between', 
-                              fontSize: '16px', 
-                              fontWeight: 'bold',
-                              color: '#fa541c'
-                            }}>
-                              <span>Balance Due:</span>
-                              <span>₹{order.remainingAmount?.toFixed(2) || '0.00'}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </Col>
-                  </Row>
+          <table className="items-table">
+            <thead>
+              <tr>
+                <th style={{ width: '50px' }}>S.No</th>
+                <th style={{ width: '80px' }}>HSN Code</th>
+                <th>DESCRIPTION</th>
+                <th style={{ width: '80px' }}>QTY.</th>
+                <th style={{ width: '100px' }}>RATE</th>
+                <th style={{ width: '120px' }}>AMOUNT Rs.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((item, index) => (
+                <tr key={index}>
+                  <td className="text-center">{index + 1}</td>
+                  <td className="text-center">-</td>
+                  <td>{item.product?.name || 'Product'}</td>
+                  <td className="text-center">{item.quantity}</td>
+                  <td className="text-right">₹{item.price.toFixed(2)}</td>
+                  <td className="text-right">₹{(item.price * item.quantity).toFixed(2)}</td>
+                </tr>
+              ))}
+              {/* Empty rows for padding */}
+              {Array.from({ length: Math.max(0, 10 - order.items.length) }).map((_, index) => (
+                <tr key={`empty-${index}`} style={{ height: '30px' }}>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Totals Section */}
+          <div className="totals-section">
+            <div className="amount-words">
+              <strong>Amount in Words:</strong>
+              <div style={{ marginTop: '10px', lineHeight: '1.4' }}>
+                {numberToWords(finalTotal)}
+              </div>
+              {/* Advance payment info */}
+              {order.isAdvanceBilling && (
+                <div style={{ marginTop: '20px', fontSize: '11px', lineHeight: '1.3' }}>
+                  <div><strong>Payment Summary:</strong></div>
+                  <div>Total Amount: ₹{finalTotal.toFixed(2)}</div>
+                  <div style={{ color: '#52c41a' }}>Advance Paid: ₹{(order.advanceAmount || 0).toFixed(2)}</div>
+                  {order.remainingAmount > 0 && (
+                    <div style={{ color: '#fa541c' }}>
+                      <strong>Balance Due: ₹{order.remainingAmount.toFixed(2)}</strong>
+                    </div>
+                  )}
                 </div>
               )}
-            />
-          </Card>
+            </div>
+            <div className="totals-column">
+              <div>
+                <div style={{ fontSize: '14px', marginBottom: '5px' }}>TOTAL</div>
+                <div style={{ fontSize: '20px', color: '#8b4513' }}>₹{finalTotal.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Signature Section */}
+          <div className="signature-section">
+            <div style={{ marginBottom: '50px' }}>
+              <strong>For {MAIN_STORE_INFO.name}</strong>
+            </div>
+            <div>
+              <strong>Authorised Signatory</strong>
+            </div>
+          </div>
 
           {/* Footer */}
-          <div style={{
-            background: '#f9f9f9',
-            padding: '20px',
-            margin: '24px -24px -24px -24px',
-            borderRadius: '0 0 12px 12px',
-            textAlign: 'center'
-          }}>
-            <Title level={4} style={{ marginBottom: 8, color: '#8b4513' }}>
-              Thank you for choosing Mitti Arts! 🏺
-            </Title>
-            <Text type="secondary">
-              For any queries, contact us at {MAIN_STORE_INFO.phone}
-            </Text>
-            <br />
-            <Text type="secondary">
-              Visit us at: {MAIN_STORE_INFO.website}
-            </Text>
-            <br />
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              This is a computer-generated invoice and requires no signature.
-            </Text>
+          <div className="footer">
+            <div className="qr-container">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(MAIN_STORE_INFO.website)}`}
+                alt="Website QR"
+                className="qr-image"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'block';
+                }}
+              />
+              <div style={{ display: 'none', fontSize: '10px', color: '#333' }}>QR Code</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: '5px' }}>
+                <strong>USE ECO-FRIENDLY SAVE HEALTH & EARTH</strong>
+              </div>
+              <div style={{ fontSize: '10px' }}>
+                Visit: {MAIN_STORE_INFO.website}
+              </div>
+            </div>
           </div>
-        </Card>
+        </div>
       </div>
+
+      {/* Payment Status for Public Invoice */}
+      {order.isAdvanceBilling && order.remainingAmount > 0 && (
+        <div style={{ maxWidth: '800px', margin: '20px auto 0', textAlign: 'center' }}>
+          <Card style={{ borderRadius: '12px', backgroundColor: '#fff7e6', border: '1px solid #ffd591' }} className="no-print">
+            <Space direction="vertical" size="small">
+              <Title level={5} style={{ margin: 0, color: '#fa8c16' }}>
+                <ClockCircleOutlined /> Partial Payment - Balance Pending
+              </Title>
+              <Text>
+                You have paid ₹{(order.advanceAmount || 0).toFixed(2)} as advance payment.
+              </Text>
+              <Text strong style={{ color: '#fa541c' }}>
+                Remaining balance: ₹{order.remainingAmount.toFixed(2)}
+              </Text>
+              <div style={{ marginTop: 8 }}>
+                <Button
+                  type="primary"
+                  icon={<PhoneOutlined />}
+                  onClick={handleContactUs}
+                  style={{
+                    background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
+                    border: 'none'
+                  }}
+                >
+                  Contact Us for Final Payment
+                </Button>
+              </div>
+            </Space>
+          </Card>
+        </div>
+      )}
 
       {/* Thank you message */}
       <div style={{ maxWidth: '800px', margin: '20px auto 0', textAlign: 'center' }}>
-        <Card style={{ borderRadius: '12px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }}>
+        <Card style={{ borderRadius: '12px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }} className="no-print">
           <Space direction="vertical" size="small">
             <Title level={5} style={{ margin: 0, color: '#52c41a' }}>
               🎉 Thank you for supporting traditional Indian pottery craftsmanship!
             </Title>
             <Text type="secondary">
-              Follow us on social media for pottery tips and new collection updates
+              For any queries, call us at {MAIN_STORE_INFO.phone}
             </Text>
-            <div style={{ marginTop: 8 }}>
-              <Tag color="#8b4513">Handcrafted with Love</Tag>
-              <Tag color="#cd853f">Eco-Friendly</Tag>
-              <Tag color="#daa520">Traditional Art</Tag>
-            </div>
           </Space>
         </Card>
       </div>

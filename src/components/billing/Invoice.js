@@ -1,4 +1,4 @@
-// src/components/billing/Invoice.js - Enhanced Beautiful Invoice
+// src/components/billing/Invoice.js - Clean Mitti Arts Style
 import React, { useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -10,23 +10,11 @@ import {
   Card,
   Spin,
   Space,
-  Tag,
-  Alert,
   Grid
 } from 'antd';
 import { 
   DownloadOutlined, 
-  PrinterOutlined, 
-  CheckCircleOutlined, 
-  ClockCircleOutlined,
-  PayCircleOutlined,
-  InfoCircleOutlined,
-  ShopOutlined,
-  UserOutlined,
-  CalendarOutlined,
-  PhoneOutlined,
-  EnvironmentOutlined,
-  TrophyOutlined
+  PrinterOutlined
 } from '@ant-design/icons';
 import { getOrder } from '../../features/order/orderSlice';
 import html2canvas from 'html2canvas';
@@ -36,106 +24,183 @@ import moment from 'moment';
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
 
-// Updated Main Store Information
+// Store Information
 const MAIN_STORE_INFO = {
-  name: 'ART OF INDIAN POTTERY (Mitti arts)',
-  address: 'Outlet: Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad.',
-  phone: '9441550927 / 7382150250',
-  gst: '36AMMPG0091P1ZN',
-  products: 'Pottery Articulture, Eco-Ganesha, Eco-Filters, Eco-Refrigerators, Live-it Pots, Combos, Cooking Pots, Diyas, Terracota, Sculptures, and all types of art works'
+  name: 'ART OF INDIAN POTTERY',
+  subtitle: 'Mfr: Pottery Articulture, Eco-Ganesha, Eco-Filters, Cooking Pots, Diyas, Terracotta, Sculptures, and all types of art works',
+  address: 'Studio: Opp. Ramoji Film City Main Gate, Near Maisamma Temple, Abdullapurmet (Vill. & Mdl.), Ranga Reddy Dist. - 501 505, Telangana.',
+  email: 'mittiarts@gmail.com',
+  website: 'www.mittiarts.com',
+  phone: '8885515554, 9441550927, 7382150250',
+  gstin: '36AMMPG0091P1ZN',
+  logo: 'https://ik.imagekit.io/mittiarts/Logo%20final%20jpg.jpg?updatedAt=1753566864506'
 };
 
 const invoiceStyles = `
-  body { 
-    font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
-    font-size: 12px;
-    line-height: 1.6;
-    color: #333;
-    background: #f7f7f7;
+  @media print {
+    body { margin: 0; }
+    .no-print { display: none !important; }
   }
+  
   .invoice-container {
     max-width: 800px;
-    margin: 20px auto;
+    margin: 0 auto;
     background: white;
-    border: 1px solid #ddd;
-    box-shadow: 0 0 15px rgba(0,0,0,0.05);
-  }
-  .header {
-    background: #8b4513;
-    color: white;
-    padding: 20px 30px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .company-details { text-align: left; }
-  .company-name { font-size: 28px; font-weight: bold; margin: 0; }
-  .company-info { font-size: 11px; opacity: 0.9; }
-  .invoice-title-section { text-align: right; }
-  .invoice-title { font-size: 32px; margin: 0; font-weight: 300; letter-spacing: 1px; }
-  .invoice-number { font-size: 14px; }
-
-  .details-section {
-    display: flex;
-    justify-content: space-between;
-    padding: 20px 30px;
-    border-bottom: 2px solid #8b4513;
-  }
-  .detail-block { width: 48%; }
-  .detail-block h4 {
-    font-size: 14px;
-    color: #8b4513;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-  }
-  .detail-item { 
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
-    font-size: 13px;
-  }
-  .detail-label { color: #555; }
-  .detail-value { font-weight: bold; }
-  .items-section { padding: 30px; }
-  .items-table { width: 100%; border-collapse: collapse; }
-  .items-table th, .items-table td {
-    padding: 12px;
-    border-bottom: 1px solid #eee;
-    text-align: left;
-  }
-  .items-table th {
-    background-color: #f7f7f7;
-    font-weight: bold;
-    text-transform: uppercase;
-    font-size: 11px;
-    color: #555;
-  }
-  .items-table .item-total, .items-table .item-price, .items-table .item-qty { text-align: right; }
-  .totals-section {
-    padding: 20px 30px;
-    background: #fdfaf7;
-    border-top: 2px solid #8b4513;
-  }
-  .totals-row {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 8px;
-  }
-  .totals-label { width: 150px; text-align: right; color: #555; }
-  .totals-value { width: 100px; text-align: right; font-weight: bold; }
-  .final-total {
-    font-size: 20px;
-    color: #8b4513;
-  }
-  .footer-section {
-    padding: 20px;
-    text-align: center;
+    border: 2px solid #000;
+    font-family: Arial, sans-serif;
     font-size: 12px;
-    background: #333;
-    color: white;
   }
-  .footer-section p { margin: 0; }
-  .no-print { display: none; }
+  
+  .invoice-header {
+    text-align: center;
+    padding: 15px;
+    border-bottom: 1px solid #000;
+  }
+  
+  .logo-container {
+    width: 60px;
+    height: 60px;
+    border: 1px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  
+  .logo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  .company-name {
+    font-size: 20px;
+    font-weight: bold;
+    margin: 5px 0;
+    color: #8b4513;
+  }
+  
+  .company-details {
+    font-size: 10px;
+    margin: 2px 0;
+    line-height: 1.3;
+  }
+  
+  .invoice-title {
+    text-align: center;
+    padding: 8px;
+    border-bottom: 1px solid #000;
+    font-weight: bold;
+    background-color: #f0f0f0;
+    font-size: 16px;
+  }
+  
+  .gstin-section {
+    text-align: center;
+    padding: 5px;
+    border-bottom: 1px solid #000;
+    font-weight: bold;
+  }
+  
+  .invoice-info {
+    display: flex;
+    padding: 10px;
+    border-bottom: 1px solid #000;
+  }
+  
+  .invoice-details {
+    flex: 1;
+    border-right: 1px solid #000;
+    padding-right: 10px;
+  }
+  
+  .customer-details {
+    flex: 1;
+    padding-left: 10px;
+  }
+  
+  .customer-section {
+    padding: 10px;
+    border-bottom: 1px solid #000;
+    text-align: right;
+  }
+  
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .items-table th,
+  .items-table td {
+    border: 1px solid #000;
+    padding: 8px 5px;
+    text-align: left;
+    font-size: 11px;
+  }
+  
+  .items-table th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    text-align: center;
+  }
+  
+  .text-center { text-align: center; }
+  .text-right { text-align: right; }
+  
+  .totals-section {
+    display: flex;
+    min-height: 100px;
+  }
+  
+  .amount-words {
+    flex: 1;
+    border-right: 1px solid #000;
+    padding: 15px;
+  }
+  
+  .totals-column {
+    width: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  
+  .signature-section {
+    text-align: right;
+    padding: 25px;
+    border-top: 1px solid #000;
+  }
+  
+  .footer {
+    text-align: center;
+    padding: 15px;
+    border-top: 1px solid #000;
+    background-color: #333;
+    color: white;
+    font-size: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+  }
+  
+  .qr-container {
+    width: 80px;
+    height: 80px;
+    background: white;
+    border: 1px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .qr-image {
+    width: 70px;
+    height: 70px;
+  }
 `;
 
 const Invoice = () => {
@@ -150,25 +215,7 @@ const Invoice = () => {
   }, [dispatch, id]);
 
   const handlePrint = () => {
-    const printContent = invoiceRef.current;
-    const WinPrint = window.open('', '', 'width=800,height=600');
-    WinPrint.document.write(`
-      <html>
-        <head>
-          <title>Invoice - ${currentOrder?.orderNumber}</title>
-          <style>${invoiceStyles}</style>
-        </head>
-        <body>
-          ${printContent.innerHTML}
-        </body>
-      </html>
-    `);
-    WinPrint.document.close();
-    WinPrint.focus();
-    setTimeout(() => {
-      WinPrint.print();
-      WinPrint.close();
-    }, 250);
+    window.print();
   };
 
   const handleDownload = async () => {
@@ -204,6 +251,52 @@ const Invoice = () => {
     }
   };
 
+  // Convert number to words
+  const numberToWords = (amount) => {
+    if (amount === 0) return "Zero Rupees Only";
+    
+    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+    const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+    
+    const convertHundreds = (num) => {
+      let result = "";
+      if (num > 99) {
+        result += ones[Math.floor(num / 100)] + " Hundred ";
+        num %= 100;
+      }
+      if (num > 19) {
+        result += tens[Math.floor(num / 10)] + " ";
+        num %= 10;
+      } else if (num > 9) {
+        result += teens[num - 10] + " ";
+        return result;
+      }
+      if (num > 0) {
+        result += ones[num] + " ";
+      }
+      return result;
+    };
+    
+    const integerPart = Math.floor(amount);
+    let words = "";
+    
+    if (integerPart > 99999) {
+      words += convertHundreds(Math.floor(integerPart / 100000)) + "Lakh ";
+      integerPart %= 100000;
+    }
+    
+    if (integerPart > 999) {
+      words += convertHundreds(Math.floor(integerPart / 1000)) + "Thousand ";
+      integerPart %= 1000;
+    }
+    
+    words += convertHundreds(integerPart);
+    words += "Rupees Only";
+    
+    return words;
+  };
+
   if (isLoading || !currentOrder) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
@@ -212,27 +305,19 @@ const Invoice = () => {
     );
   }
 
-  const {
-    subtotal,
-    discount,
-    wholesaleDiscount,
-    total,
-    isAdvanceBilling,
-    advanceAmount,
-    remainingAmount
-  } = currentOrder;
-  
-  const finalTotal = total || 0;
+  const finalTotal = currentOrder.total || 0;
 
   return (
     <div style={{ padding: screens.xs ? 12 : 32, background: '#f0f2f5' }}>
       <style>{invoiceStyles}</style>
+      
+      {/* Print/Download Controls */}
       <div className="no-print">
         <Card style={{ marginBottom: 24, borderRadius: 12 }}>
           <Row justify="space-between" align="middle">
             <Col>
-              <Title level={4} style={{ margin: 0 }}>Invoice Preview</Title>
-              <Text type="secondary">Invoice #{currentOrder.orderNumber}</Text>
+              <Title level={4} style={{ margin: 0 }}>Invoice #{currentOrder.orderNumber}</Title>
+              <Text type="secondary">Clean Invoice Format</Text>
             </Col>
             <Col>
               <Space>
@@ -257,105 +342,185 @@ const Invoice = () => {
         </Card>
       </div>
 
+      {/* Invoice Content */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <div ref={invoiceRef} className="invoice-container">
-          <div className="header">
-            <div className="company-details">
-              <h1 className="company-name">{MAIN_STORE_INFO.name}</h1>
-              <p className="company-info">
-                {MAIN_STORE_INFO.address}<br />
-                Contact: {MAIN_STORE_INFO.phone} | GSTIN: {MAIN_STORE_INFO.gst}
-              </p>
+          
+          {/* Header */}
+          <div className="invoice-header">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
+              <div className="logo-container">
+                <img 
+                  src={MAIN_STORE_INFO.logo} 
+                  alt="Mitti Arts Logo" 
+                  className="logo-image"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div style={{ display: 'none', fontSize: '24px', color: '#8b4513' }}>🏺</div>
+              </div>
+              <div>
+                <div className="company-name">{MAIN_STORE_INFO.name}</div>
+                <div className="company-details">{MAIN_STORE_INFO.subtitle}</div>
+              </div>
             </div>
-            <div className="invoice-title-section">
-              <h2 className="invoice-title">INVOICE</h2>
-              <p className="invoice-number">#{currentOrder.orderNumber}</p>
+            <div className="company-details" style={{ marginTop: '10px' }}>
+              {MAIN_STORE_INFO.address}
+            </div>
+            <div className="company-details" style={{ marginTop: '5px' }}>
+              E-mail: {MAIN_STORE_INFO.email}, {MAIN_STORE_INFO.website}
+            </div>
+            <div className="company-details">
+              Cell: {MAIN_STORE_INFO.phone}
             </div>
           </div>
-          
-          <div className="details-section">
-            <div className="detail-block">
-              <h4>Bill To</h4>
-              <div className="detail-item">
-                <span className="detail-label">Name:</span>
-                <span className="detail-value">{currentOrder.customer?.name || 'Walk-in Customer'}</span>
+
+          {/* TAX INVOICE Title */}
+          <div className="invoice-title">
+            TAX INVOICE
+          </div>
+
+          {/* GSTIN */}
+          <div className="gstin-section">
+            GSTIN: {MAIN_STORE_INFO.gstin}
+          </div>
+
+          {/* Invoice Details Section */}
+          <div className="invoice-info">
+            <div className="invoice-details">
+              <div><strong>P.O. No.</strong></div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(currentOrder.createdAt?.toDate?.() || currentOrder.createdAt).format('DD/MM/YYYY')}</div>
+            </div>
+            <div style={{ flex: 1, borderRight: '1px solid #000', borderLeft: '1px solid #000', paddingLeft: '10px', paddingRight: '10px' }}>
+              <div><strong>DC No.</strong></div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong></div>
+            </div>
+            <div className="customer-details">
+              <div><strong>Invoice No.</strong> {currentOrder.orderNumber}</div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(currentOrder.createdAt?.toDate?.() || currentOrder.createdAt).format('DD/MM/YYYY')}</div>
+            </div>
+          </div>
+
+          {/* Database IDs for Reference */}
+          <div style={{ padding: '5px 10px', borderBottom: '1px solid #000', backgroundColor: '#f9f9f9', fontSize: '9px', color: '#666' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span><strong>Order ID:</strong> {currentOrder.id}</span>
+              <span><strong>Invoice ID:</strong> {currentOrder.invoiceId || currentOrder.id}</span>
+              <span><strong>System Ref:</strong> {currentOrder.orderNumber}</span>
+            </div>
+          </div>
+
+          {/* Customer Details */}
+          <div className="customer-section">
+            <div><strong>M/s. {currentOrder.customer?.name || 'Walk-in Customer'}</strong></div>
+            {currentOrder.customer?.phone && (
+              <div style={{ marginTop: '5px' }}>Ph: {currentOrder.customer.phone}</div>
+            )}
+            <div style={{ marginTop: '10px' }}>
+              <strong>GSTIN: ________________________________</strong>
+            </div>
+          </div>
+
+          {/* Items Table */}
+          <table className="items-table">
+            <thead>
+              <tr>
+                <th style={{ width: '50px' }}>S.No</th>
+                <th style={{ width: '80px' }}>HSN Code</th>
+                <th>DESCRIPTION</th>
+                <th style={{ width: '80px' }}>QTY.</th>
+                <th style={{ width: '100px' }}>RATE</th>
+                <th style={{ width: '120px' }}>AMOUNT Rs.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentOrder.items.map((item, index) => (
+                <tr key={index}>
+                  <td className="text-center">{index + 1}</td>
+                  <td className="text-center">-</td>
+                  <td>{item.product?.name || 'Product'}</td>
+                  <td className="text-center">{item.quantity}</td>
+                  <td className="text-right">₹{item.price.toFixed(2)}</td>
+                  <td className="text-right">₹{(item.price * item.quantity).toFixed(2)}</td>
+                </tr>
+              ))}
+              {/* Empty rows for padding */}
+              {Array.from({ length: Math.max(0, 10 - currentOrder.items.length) }).map((_, index) => (
+                <tr key={`empty-${index}`} style={{ height: '30px' }}>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                  <td>&nbsp;</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Totals Section */}
+          <div className="totals-section">
+            <div className="amount-words">
+              <strong>Amount in Words:</strong>
+              <div style={{ marginTop: '10px', lineHeight: '1.4' }}>
+                {numberToWords(finalTotal)}
               </div>
-              {currentOrder.customer?.phone && (
-                <div className="detail-item">
-                  <span className="detail-label">Phone:</span>
-                  <span className="detail-value">{currentOrder.customer.phone}</span>
+              {/* Advance payment info */}
+              {currentOrder.isAdvanceBilling && (
+                <div style={{ marginTop: '20px', fontSize: '11px', lineHeight: '1.3' }}>
+                  <div><strong>Payment Summary:</strong></div>
+                  <div>Total Amount: ₹{finalTotal.toFixed(2)}</div>
+                  <div style={{ color: '#52c41a' }}>Advance Paid: ₹{(currentOrder.advanceAmount || 0).toFixed(2)}</div>
+                  {currentOrder.remainingAmount > 0 && (
+                    <div style={{ color: '#fa541c' }}>
+                      <strong>Balance Due: ₹{currentOrder.remainingAmount.toFixed(2)}</strong>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            <div className="detail-block">
-              <h4>Details</h4>
-              <div className="detail-item">
-                <span className="detail-label">Date:</span>
-                <span className="detail-value">{moment(currentOrder.createdAt?.toDate?.() || currentOrder.createdAt).format('DD MMMM YYYY')}</span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Payment:</span>
-                <span className="detail-value">{currentOrder.paymentMethod || 'Cash'}</span>
+            <div className="totals-column">
+              <div>
+                <div style={{ fontSize: '14px', marginBottom: '5px' }}>TOTAL</div>
+                <div style={{ fontSize: '20px', color: '#8b4513' }}>₹{finalTotal.toFixed(2)}</div>
               </div>
             </div>
           </div>
 
-          <div className="items-section">
-            <table className="items-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th className="item-details">Product</th>
-                  <th className="item-qty">Qty</th>
-                  <th className="item-price">Unit Price</th>
-                  <th className="item-total">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentOrder.items.map((item, index) => (
-                  <tr key={`${item.product?.id || item.productId}-${index}`}>
-                    <td>{index + 1}</td>
-                    <td className="item-details">{item.product?.name || 'Product'}</td>
-                    <td className="item-qty">{item.quantity}</td>
-                    <td className="item-price">₹{item.price.toFixed(2)}</td>
-                    <td className="item-total">₹{(item.price * item.quantity).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Signature Section */}
+          <div className="signature-section">
+            <div style={{ marginBottom: '50px' }}>
+              <strong>For {MAIN_STORE_INFO.name}</strong>
+            </div>
+            <div>
+              <strong>Authorised Signatory</strong>
+            </div>
           </div>
 
-          <div className="totals-section">
-            <div className="totals-row">
-              <span className="totals-label">Subtotal:</span>
-              <span className="totals-value">₹{subtotal.toFixed(2)}</span>
+          {/* Footer */}
+          <div className="footer">
+            <div className="qr-container">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(MAIN_STORE_INFO.website)}`}
+                alt="Website QR"
+                className="qr-image"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'block';
+                }}
+              />
+              <div style={{ display: 'none', fontSize: '10px', color: '#333' }}>QR Code</div>
             </div>
-            {(discount > 0 || wholesaleDiscount > 0) && (
-              <div className="totals-row">
-                <span className="totals-label">Discount:</span>
-                <span className="totals-value">-₹{(discount + wholesaleDiscount).toFixed(2)}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: '5px' }}>
+                <strong>USE ECO-FRIENDLY SAVE HEALTH & EARTH</strong>
               </div>
-            )}
-            <div className="totals-row">
-              <span className="totals-label final-total">Total:</span>
-              <span className="totals-value final-total">₹{finalTotal.toFixed(2)}</span>
+              <div style={{ fontSize: '10px' }}>
+                Visit: {MAIN_STORE_INFO.website}
+              </div>
             </div>
-            {isAdvanceBilling && (
-              <>
-                <div className="totals-row" style={{ marginTop: '10px' }}>
-                  <span className="totals-label">Advance Paid:</span>
-                  <span className="totals-value">₹{advanceAmount.toFixed(2)}</span>
-                </div>
-                <div className="totals-row">
-                  <span className="totals-label" style={{ color: '#d9534f', fontWeight: 'bold' }}>Amount Due:</span>
-                  <span className="totals-value" style={{ color: '#d9534f', fontWeight: 'bold' }}>₹{remainingAmount.toFixed(2)}</span>
-                </div>
-              </>
-            )}
-          </div>
-          
-          <div className="footer-section">
-            <p><strong>Products:</strong> {MAIN_STORE_INFO.products}</p>
           </div>
         </div>
       </div>
