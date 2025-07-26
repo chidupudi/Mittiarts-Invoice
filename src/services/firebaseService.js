@@ -1,4 +1,4 @@
-// src/services/firebaseService.js - Enhanced with better security
+// src/services/firebaseService.js - Updated with Share Token Access
 import {
   collection,
   doc,
@@ -64,33 +64,60 @@ class FirebaseService {
     return plainObject;
   }
 
-  // Generate secure bill token with expiry
-  generateBillToken() {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substr(2, 12);
-    return `MITTI_${timestamp}_${random}`.toUpperCase();
+  // 🆕 NEW: Public access method for orders by share token
+  async getOrderByShareToken(shareToken, clientIp = 'unknown') {
+    try {
+      console.log('🔍 Public access attempt for token:', shareToken?.slice(0, 10) + '...');
+      console.log('📍 Access from IP:', clientIp);
+
+      if (!shareToken) {
+        throw new Error('Invalid invoice link');
+      }
+
+      // Query orders by shareToken
+      const ordersRef = collection(db, 'orders');
+      const q = query(
+        ordersRef, 
+        where('shareToken', '==', shareToken),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.warn('🚫 Invoice not found for token:', shareToken?.slice(0, 10) + '...');
+        throw new Error('Invoice not found');
+      }
+
+      let orderData = null;
+      querySnapshot.forEach((doc) => {
+        const data = this.convertDocToPlainObject(doc.data());
+        orderData = { id: doc.id, ...data };
+      });
+
+      if (!orderData) {
+        throw new Error('Invoice not found');
+      }
+
+      // Log access for security
+      console.log('✅ Public invoice access:', {
+        orderId: orderData.id,
+        orderNumber: orderData.orderNumber,
+        customerName: orderData.customer?.name || 'Walk-in',
+        accessIP: clientIp,
+        accessTime: new Date().toISOString()
+      });
+
+      // Remove sensitive data for public access
+      const publicOrderData = this.sanitizeOrderForPublic(orderData);
+      return publicOrderData;
+    } catch (error) {
+      console.error('❌ Public invoice access error:', error.message);
+      throw new Error(`Unable to access invoice: ${error.message}`);
+    }
   }
 
-  // Validate bill token format
-  isValidBillTokenFormat(token) {
-    return /^MITTI_[A-Z0-9_]+$/.test(token);
-  }
-
-  // Check if bill token is expired (tokens expire after 90 days)
-  isBillTokenExpired(order) {
-    if (!order.createdAt) return true;
-    
-    const createdDate = order.createdAt instanceof Timestamp 
-      ? order.createdAt.toDate() 
-      : new Date(order.createdAt);
-    
-    const expiryDate = new Date(createdDate);
-    expiryDate.setDate(expiryDate.getDate() + 90); // 90 days expiry
-    
-    return new Date() > expiryDate;
-  }
-
-  // 🔐 SECURE: Public access method for orders by bill token
+  // 🔐 SECURE: Public access method for orders by bill token (keeping for SMS compatibility)
   async getOrderByBillToken(billToken, clientIp = 'unknown') {
     try {
       // Rate limiting
@@ -143,6 +170,25 @@ class FirebaseService {
       console.error('❌ Public invoice access error:', error.message);
       throw new Error(`Unable to access invoice: ${error.message}`);
     }
+  }
+
+  // Validate bill token format
+  isValidBillTokenFormat(token) {
+    return /^MITTI_[A-Z0-9_]+$/.test(token);
+  }
+
+  // Check if bill token is expired (tokens expire after 90 days)
+  isBillTokenExpired(order) {
+    if (!order.createdAt) return true;
+    
+    const createdDate = order.createdAt instanceof Timestamp 
+      ? order.createdAt.toDate() 
+      : new Date(order.createdAt);
+    
+    const expiryDate = new Date(createdDate);
+    expiryDate.setDate(expiryDate.getDate() + 90); // 90 days expiry
+    
+    return new Date() > expiryDate;
   }
 
   // Remove sensitive data for public access

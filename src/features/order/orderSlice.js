@@ -1,11 +1,18 @@
-// src/features/order/orderSlice.js - Enhanced Mitti Arts Order Management with Dynamic Branches and SMS Integration
+// src/features/order/orderSlice.js - Complete Updated with Share Token Generation
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import moment from 'moment'; // Imported for date calculations in analytics
+import moment from 'moment';
 import firebaseService from '../../services/firebaseService';
 import invoiceService from '../../services/invoiceService';
-import smsService from '../../services/smsService'; // Added for SMS integration
+import smsService from '../../services/smsService';
 import { updateStock } from '../products/productSlice';
 import { updateCustomerStats } from '../customer/customerSlice';
+
+// Helper function to generate share token
+const generateShareToken = () => {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substr(2, 8);
+  return `${timestamp}${random}`;
+};
 
 // Helper function to safely handle SMS operations without affecting order creation
 const handleSMSDelivery = async (orderId, operation, context = '') => {
@@ -202,6 +209,9 @@ export const createOrder = createAsyncThunk(
       
       const orderNumber = `${branchPrefix}-${Date.now().toString().slice(-8)}`;
 
+      // 🆕 GENERATE SHARE TOKEN FOR PUBLIC ACCESS
+      const shareToken = generateShareToken();
+
       // Helper to deeply remove undefined fields
       function removeUndefinedDeep(obj) {
         if (Array.isArray(obj)) {
@@ -223,6 +233,9 @@ export const createOrder = createAsyncThunk(
         // Basic order info
         orderNumber,
         customerId: orderData.customerId,
+        
+        // 🆕 ADD SHARE TOKEN
+        shareToken,
         
         // Mitti Arts business fields
         businessType: orderData.businessType,
@@ -291,6 +304,7 @@ export const createOrder = createAsyncThunk(
       // Create the order in Firebase
       const order = await firebaseService.create('orders', enhancedOrderData);
       console.log('Mitti Arts order created successfully:', order.id);
+      console.log('🔗 Share token generated:', shareToken);
 
       // Get customer data for SMS and invoice
       let customer = null;
@@ -314,7 +328,7 @@ export const createOrder = createAsyncThunk(
         // Don't fail the order creation if invoice creation fails
       }
 
-      // 🆕 SIMPLIFIED SMS INTEGRATION
+      // SMS INTEGRATION - SMS functionality remains the same
       try {
         const customerPhone = customer?.phone;
         const customerName = customer?.name || 'Valued Customer';
@@ -322,7 +336,7 @@ export const createOrder = createAsyncThunk(
         if (customerPhone && smsService.isValidPhoneNumber(customerPhone)) {
           console.log('📱 Sending SMS to customer...');
 
-          // Generate bill token for secure sharing
+          // Generate bill token for secure sharing (keeping for SMS compatibility)
           const billToken = smsService.generateBillToken();
 
           // Store bill token in order
@@ -499,7 +513,7 @@ export const getOrder = createAsyncThunk(
   }
 );
 
-// [NEW & ENHANCED] Complete advance payment with new invoice generation and SMS
+// Complete advance payment with new invoice generation and SMS
 export const completeAdvancePayment = createAsyncThunk(
   'orders/completeAdvance',
   async ({ orderId, paymentAmount, paymentMethod, bankDetails, notes }, { rejectWithValue, dispatch }) => {
@@ -630,7 +644,7 @@ export const completeAdvancePayment = createAsyncThunk(
       // Update the original order
       const updatedOrder = await firebaseService.update('orders', orderId, orderUpdate);
       
-      // 🆕 SEND COMPLETION SMS IF FULLY PAID
+      // Send completion SMS if fully paid
       if (isFullyPaid) {
         try {
           // Get customer data
@@ -698,7 +712,7 @@ export const completeAdvancePayment = createAsyncThunk(
   }
 );
 
-// [NEW] Get advance payment history for an order
+// Get advance payment history for an order
 export const getAdvancePaymentHistory = createAsyncThunk(
   'orders/getAdvanceHistory',
   async (orderId, { rejectWithValue }) => {
@@ -716,7 +730,7 @@ export const getAdvancePaymentHistory = createAsyncThunk(
   }
 );
 
-// [NEW] Get all advance payment records for reporting
+// Get all advance payment records for reporting
 export const getAdvancePaymentRecords = createAsyncThunk(
   'orders/getAdvanceRecords',
   async (filters = {}, { rejectWithValue }) => {
@@ -783,7 +797,7 @@ export const getAdvancePaymentRecords = createAsyncThunk(
   }
 );
 
-// [NEW] Get advance completion records
+// Get advance completion records
 export const getAdvanceCompletions = createAsyncThunk(
   'orders/getAdvanceCompletions',
   async (filters = {}, { rejectWithValue }) => {
@@ -822,7 +836,7 @@ export const getAdvanceCompletions = createAsyncThunk(
   }
 );
 
-// [NEW] Calculate advance payment analytics
+// Calculate advance payment analytics
 export const calculateAdvanceAnalytics = createAsyncThunk(
   'orders/calculateAdvanceAnalytics',
   async (dateRange = {}, { rejectWithValue, getState }) => {
@@ -919,7 +933,6 @@ export const calculateAdvanceAnalytics = createAsyncThunk(
     }
   }
 );
-
 
 // Cancel order with enhanced logic
 export const cancelOrder = createAsyncThunk(
@@ -1161,7 +1174,7 @@ const orderSlice = createSlice({
       state.analytics = { ...state.analytics, ...action.payload };
     },
     
-    // [NEW] Advance Analytics reducers
+    // Advance Analytics reducers
     setAdvanceAnalytics: (state, action) => {
       state.advanceAnalytics = action.payload;
     },
@@ -1254,7 +1267,7 @@ const orderSlice = createSlice({
         state.error = action.payload;
       })
       
-      // [NEW] Complete advance payment extra reducers
+      // Complete advance payment extra reducers
       .addCase(completeAdvancePayment.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -1281,22 +1294,22 @@ const orderSlice = createSlice({
         state.error = action.payload;
       })
 
-      // [NEW] Get advance payment history
+      // Get advance payment history
       .addCase(getAdvancePaymentHistory.fulfilled, (state, action) => {
         state.paymentHistory = action.payload;
       })
 
-      // [NEW] Get advance payment records
+      // Get advance payment records
       .addCase(getAdvancePaymentRecords.fulfilled, (state, action) => {
         state.paymentRecords = action.payload;
       })
 
-      // [NEW] Get advance completions
+      // Get advance completions
       .addCase(getAdvanceCompletions.fulfilled, (state, action) => {
         state.advanceCompletions = action.payload;
       })
 
-      // [NEW] Calculate advance analytics
+      // Calculate advance analytics
       .addCase(calculateAdvanceAnalytics.fulfilled, (state, action) => {
         state.advanceAnalytics = action.payload;
       })
@@ -1329,8 +1342,8 @@ export const {
   updateAdvanceOrders,
   updatePendingPayments,
   updateAnalytics,
-  setAdvanceAnalytics, // New export
-  clearAdvanceState,   // New export
+  setAdvanceAnalytics,
+  clearAdvanceState,
   clearError
 } = orderSlice.actions;
 

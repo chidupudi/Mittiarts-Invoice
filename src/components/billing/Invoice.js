@@ -1,5 +1,5 @@
-// src/components/billing/Invoice.js - Clean Mitti Arts Style
-import React, { useEffect, useRef } from 'react';
+// src/components/billing/Invoice.js - Updated with Share Button
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -10,13 +10,16 @@ import {
   Card,
   Spin,
   Space,
-  Grid
+  Grid,
+  message
 } from 'antd';
 import { 
   DownloadOutlined, 
-  PrinterOutlined
+  PrinterOutlined,
+  ShareAltOutlined
 } from '@ant-design/icons';
 import { getOrder } from '../../features/order/orderSlice';
+import firebaseService from '../../services/firebaseService';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import moment from 'moment';
@@ -209,6 +212,9 @@ const Invoice = () => {
   const { currentOrder, isLoading } = useSelector(state => state.orders);
   const invoiceRef = useRef();
   const screens = useBreakpoint();
+  
+  // 🆕 ADD STATE FOR SHARE LOADING
+  const [shareLoading, setShareLoading] = useState(false);
 
   useEffect(() => {
     dispatch(getOrder(id));
@@ -248,6 +254,92 @@ const Invoice = () => {
       pdf.save(`invoice-${currentOrder?.orderNumber || 'invoice'}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+    }
+  };
+
+  // 🆕 UPDATED SHARE FUNCTION - Replace your existing handleShare function with this
+  const handleShare = async () => {
+    if (!currentOrder) {
+      message.error('Order not found');
+      return;
+    }
+
+    setShareLoading(true);
+    try {
+      let shareToken = currentOrder.shareToken;
+      
+      // 🆕 If order doesn't have shareToken, generate one
+      if (!shareToken) {
+        console.log('🔧 Generating share token for existing order...');
+        
+        // Generate new token
+        const timestamp = Date.now().toString(36);
+        const random = Math.random().toString(36).substr(2, 8);
+        shareToken = `${timestamp}${random}`;
+        
+        // Save to Firebase
+        await firebaseService.update('orders', currentOrder.id, {
+          shareToken: shareToken,
+          shareTokenGeneratedAt: new Date()
+        });
+        
+        // Update local state
+        currentOrder.shareToken = shareToken;
+        
+        console.log('✅ Share token generated and saved:', shareToken);
+      }
+      
+      // Generate the shareable URL
+      const shareUrl = `${window.location.origin}/public/invoice/${shareToken}`;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+      
+      message.success('🎉 Share link copied to clipboard!');
+      
+      // Log the share action
+      console.log('📤 Invoice shared:', {
+        orderId: currentOrder.id,
+        orderNumber: currentOrder.orderNumber,
+        shareToken: shareToken,
+        shareUrl,
+        sharedAt: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('Share error:', error);
+      
+      // Fallback for older browsers
+      try {
+        let shareToken = currentOrder.shareToken;
+        
+        if (!shareToken) {
+          const timestamp = Date.now().toString(36);
+          const random = Math.random().toString(36).substr(2, 8);
+          shareToken = `${timestamp}${random}`;
+          
+          await firebaseService.update('orders', currentOrder.id, {
+            shareToken: shareToken,
+            shareTokenGeneratedAt: new Date()
+          });
+          
+          currentOrder.shareToken = shareToken;
+        }
+        
+        const shareUrl = `${window.location.origin}/public/invoice/${shareToken}`;
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        message.success('Share link copied to clipboard!');
+      } catch (fallbackError) {
+        message.error('Failed to generate share link. Please try again.');
+      }
+    } finally {
+      setShareLoading(false);
     }
   };
 
@@ -321,6 +413,20 @@ const Invoice = () => {
             </Col>
             <Col>
               <Space>
+                {/* 🆕 ADD SHARE BUTTON */}
+                <Button 
+                  icon={<ShareAltOutlined />} 
+                  onClick={handleShare}
+                  loading={shareLoading}
+                  style={{ 
+                    backgroundColor: '#52c41a', 
+                    borderColor: '#52c41a', 
+                    color: 'white' 
+                  }}
+                  size="large"
+                >
+                  Share Invoice
+                </Button>
                 <Button 
                   icon={<PrinterOutlined />} 
                   onClick={handlePrint} 

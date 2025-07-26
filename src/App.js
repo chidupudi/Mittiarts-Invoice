@@ -1,4 +1,4 @@
-// src/App.js - Complete Updated App with Public Invoice Route
+// src/App.js - Updated Routes for Public Invoice Share
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -139,6 +139,7 @@ function AppContent() {
       <Routes>
         {/* PUBLIC ROUTES - No authentication required */}
         <Route path="/login" element={<Login />} />
+        {/* 🆕 UPDATED PUBLIC INVOICE ROUTE - Using shareToken */}
         <Route path="/public/invoice/:token" element={<PublicInvoice />} />
         
         {/* PROTECTED ROUTES - Authentication required */}

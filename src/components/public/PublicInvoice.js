@@ -1,4 +1,4 @@
-// src/components/public/PublicInvoice.js - Clean Mitti Arts Style
+// src/components/public/PublicInvoice.js - Updated to use Share Token
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -217,7 +217,7 @@ const invoiceStyles = `
 `;
 
 const PublicInvoice = () => {
-  const { token } = useParams();
+  const { token } = useParams(); // This is the shareToken now
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -227,7 +227,7 @@ const PublicInvoice = () => {
     if (token) {
       fetchInvoiceByToken();
     } else {
-      setError('Invalid invoice link - no token provided');
+      setError('Invalid invoice link');
       setLoading(false);
     }
   }, [token]);
@@ -238,7 +238,8 @@ const PublicInvoice = () => {
       setError(null);
 
       const clientIp = getClientIP();
-      const orderData = await firebaseService.getOrderByBillToken(token, clientIp);
+      // 🆕 USE NEW SHARE TOKEN METHOD
+      const orderData = await firebaseService.getOrderByShareToken(token, clientIp);
       setOrder(orderData);
     } catch (err) {
       console.error('Error accessing public invoice:', err);
@@ -249,7 +250,8 @@ const PublicInvoice = () => {
   };
 
   const getClientIP = () => {
-    return 'unknown';
+    // Simple IP detection - in production, use proper IP detection
+    return 'visitor_ip';
   };
 
   // Convert number to words
@@ -405,12 +407,7 @@ const PublicInvoice = () => {
             subTitle={
               <div>
                 <Alert
-                  message={
-                    error.includes('expired') ? 'Invoice Link Expired' :
-                    error.includes('Too many requests') ? 'Too Many Requests' :
-                    error.includes('Invalid invoice link format') ? 'Invalid Link Format' :
-                    'Invoice Not Found'
-                  }
+                  message="Invoice Not Found"
                   description={error}
                   type="error"
                   showIcon
@@ -421,8 +418,8 @@ const PublicInvoice = () => {
                   <Title level={5}>What you can do:</Title>
                   <ul style={{ paddingLeft: '20px' }}>
                     <li>Contact us for a new invoice link</li>
-                    <li>Check if you copied the complete link from SMS</li>
-                    <li>Try again after a few minutes if rate limited</li>
+                    <li>Check if you copied the complete link</li>
+                    <li>Try refreshing the page</li>
                   </ul>
                 </div>
               </div>
