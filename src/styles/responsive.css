@@ -1,0 +1,606 @@
+/* Global Responsive System for Mitti Arts POS - Works across ALL components */
+
+/* CSS Custom Properties for consistent theming */
+:root {
+  /* Brand Colors */
+  --mitti-primary: #8b4513;
+  --mitti-primary-hover: #a0522d;
+  --mitti-secondary: #d2b48c;
+  --mitti-accent: #daa520;
+  --mitti-text-dark: #2c3e50;
+  --mitti-background-light: #faf8f3;
+  --mitti-shadow: rgba(139, 69, 19, 0.1);
+  --mitti-shadow-hover: rgba(139, 69, 19, 0.2);
+
+  /* Responsive Breakpoints */
+  --mobile-max: 767px;
+  --tablet-min: 768px;
+  --tablet-max: 1023px;
+  --desktop-min: 1024px;
+  --wide-min: 1440px;
+
+  /* Spacing System */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+
+  /* Typography Scale */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  /* Component Heights */
+  --button-height-sm: 32px;
+  --button-height-base: 44px;
+  --button-height-lg: 56px;
+  --input-height: 44px;
+  --header-height: 64px;
+  --card-padding: var(--space-lg);
+
+  /* Animation Timing */
+  --transition-fast: 150ms;
+  --transition-base: 300ms;
+  --transition-slow: 500ms;
+
+  /* Z-index Scale */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+}
+
+/* Universal Box Sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Root Element */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Body Reset */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica', 'Arial', sans-serif;
+  line-height: 1.5;
+  color: var(--mitti-text-dark);
+  background-color: var(--mitti-background-light);
+  overflow-x: hidden;
+}
+
+/* Focus Management */
+*:focus {
+  outline: 2px solid var(--mitti-primary);
+  outline-offset: 2px;
+}
+
+/* Touch-Friendly Interactions */
+button,
+.ant-btn,
+[role="button"],
+.clickable {
+  min-height: var(--button-height-base);
+  min-width: var(--button-height-base);
+  touch-action: manipulation;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+/* Image Optimization */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Performance Classes */
+.hw-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000;
+}
+
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}
+
+/* Loading States */
+.loading-state {
+  opacity: 0.6;
+  pointer-events: none;
+  position: relative;
+}
+
+.loading-state::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid var(--mitti-secondary);
+  border-top: 2px solid var(--mitti-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Animations */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+/* Utility Classes */
+.fade-in {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.slide-up {
+  animation: slideUp var(--transition-base) ease-out;
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Text Utilities */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Spacing Utilities */
+.m-0 { margin: 0 !important; }
+.m-auto { margin: auto !important; }
+.mt-sm { margin-top: var(--space-sm) !important; }
+.mt-md { margin-top: var(--space-md) !important; }
+.mb-sm { margin-bottom: var(--space-sm) !important; }
+.mb-md { margin-bottom: var(--space-md) !important; }
+.p-0 { padding: 0 !important; }
+.p-sm { padding: var(--space-sm) !important; }
+.p-md { padding: var(--space-md) !important; }
+
+/* Layout Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+/* MOBILE FIRST RESPONSIVE DESIGN */
+
+/* Extra Small Devices (phones, 320px and up) */
+@media (max-width: 480px) {
+  :root {
+    --card-padding: var(--space-sm);
+    --text-base: 14px;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  /* Stack all columns on mobile */
+  .ant-row:not(.ant-row-no-wrap) {
+    flex-direction: column !important;
+  }
+
+  .ant-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-bottom: var(--space-sm);
+  }
+
+  /* Compact forms */
+  .ant-form-item {
+    margin-bottom: var(--space-sm);
+  }
+
+  .ant-card {
+    margin-bottom: var(--space-sm);
+  }
+
+  .ant-card-head {
+    padding: var(--space-sm) var(--space-md);
+    min-height: 40px;
+  }
+
+  .ant-card-body {
+    padding: var(--space-md);
+  }
+
+  /* Full width buttons on mobile */
+  .mobile-full-width {
+    width: 100% !important;
+  }
+
+  /* Compact tables */
+  .ant-table-thead > tr > th {
+    font-size: var(--text-xs);
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  .ant-table-tbody > tr > td {
+    font-size: var(--text-sm);
+    padding: var(--space-xs) var(--space-sm);
+  }
+
+  /* Hide non-essential columns on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* Sticky actions on mobile */
+  .mobile-sticky-actions {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding: var(--space-md);
+    box-shadow: 0 -2px 8px var(--mitti-shadow);
+    z-index: var(--z-sticky);
+  }
+}
+
+/* Small Devices (tablets, 768px and up) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ant-card-body {
+    padding: var(--space-lg);
+  }
+
+  /* Show more content on tablets */
+  .hide-tablet {
+    display: none !important;
+  }
+}
+
+/* Medium Devices (desktops, 1024px and up) */
+@media (min-width: 1024px) {
+  .ant-layout-content {
+    padding: var(--space-xl);
+  }
+
+  /* Enhanced desktop features */
+  .desktop-enhanced {
+    display: block;
+  }
+
+  .hide-desktop {
+    display: none !important;
+  }
+}
+
+/* Large Devices (wide desktops, 1440px and up) */
+@media (min-width: 1440px) {
+  .ant-layout-content {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+}
+
+/* COMPONENT-SPECIFIC RESPONSIVE RULES */
+
+/* Ant Design Overrides for Consistency */
+.ant-layout {
+  background: var(--mitti-background-light);
+}
+
+.ant-layout-sider {
+  box-shadow: 2px 0 8px var(--mitti-shadow);
+}
+
+.ant-menu-item:hover,
+.ant-menu-item-selected {
+  background-color: rgba(139, 69, 19, 0.1) !important;
+}
+
+.ant-btn-primary {
+  background-color: var(--mitti-primary);
+  border-color: var(--mitti-primary);
+}
+
+.ant-btn-primary:hover {
+  background-color: var(--mitti-primary-hover);
+  border-color: var(--mitti-primary-hover);
+}
+
+.ant-input:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--mitti-primary);
+  box-shadow: 0 0 0 2px rgba(139, 69, 19, 0.2);
+}
+
+/* Form Controls Mobile Enhancement */
+@media (max-width: 767px) {
+  .ant-input,
+  .ant-select-selector,
+  .ant-picker {
+    height: var(--input-height) !important;
+    font-size: var(--text-base) !important; /* Prevents zoom on iOS */
+    border-radius: 8px;
+  }
+
+  .ant-btn {
+    height: var(--button-height-base);
+    border-radius: 8px;
+    font-size: var(--text-base);
+  }
+
+  /* Full width modals on mobile */
+  .ant-modal {
+    max-width: calc(100vw - var(--space-md)) !important;
+    margin: var(--space-sm);
+  }
+
+  .ant-modal-content {
+    border-radius: 12px;
+  }
+
+  /* Drawer optimizations */
+  .ant-drawer-body {
+    padding: var(--space-md);
+  }
+}
+
+/* Table Responsiveness */
+@media (max-width: 1023px) {
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .ant-table {
+    min-width: 600px;
+  }
+
+  .ant-table-thead > tr > th {
+    white-space: nowrap;
+    font-size: var(--text-sm);
+  }
+
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
+    font-size: var(--text-sm);
+  }
+}
+
+/* Card Grid Responsiveness */
+.responsive-card-grid {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+@media (max-width: 767px) {
+  .responsive-card-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mitti-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mitti-primary-hover);
+}
+
+/* Print Styles */
+@media print {
+  * {
+    color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .ant-layout-sider,
+  .ant-layout-header,
+  .no-print,
+  .print-hide {
+    display: none !important;
+  }
+
+  .ant-layout-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ant-card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}
+
+/* Accessibility Enhancements */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --mitti-primary: #000000;
+    --mitti-text-dark: #000000;
+    --mitti-shadow: rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mitti-background-light: #1a1a1a;
+    --mitti-text-dark: #ffffff;
+    --mitti-shadow: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Component Loading States */
+.component-loading {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mitti-background-light);
+  border-radius: 8px;
+}
+
+.component-loading::before {
+  content: '🏺';
+  font-size: 2rem;
+  animation: pulse 1.5s infinite;
+}
+
+/* Error States */
+.component-error {
+  padding: var(--space-lg);
+  text-align: center;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 8px;
+  color: #a8071a;
+}
+
+/* Success States */
+.component-success {
+  padding: var(--space-lg);
+  text-align: center;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 8px;
+  color: #389e0d;
+}
+
+/* Selection styling */
+::selection {
+  background: var(--mitti-secondary);
+  color: var(--mitti-text-dark);
+}
+
+::-moz-selection {
+  background: var(--mitti-secondary);
+  color: var(--mitti-text-dark);
+}
+
+/* Component-specific classes that work everywhere */
+.mitti-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--mitti-shadow);
+  transition: box-shadow var(--transition-base) ease;
+}
+
+.mitti-card:hover {
+  box-shadow: 0 4px 16px var(--mitti-shadow-hover);
+}
+
+.mitti-button {
+  background: var(--mitti-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+.mitti-button:hover {
+  background: var(--mitti-primary-hover);
+  transform: translateY(-1px);
+}
+
+.mitti-button:active {
+  transform: translateY(0);
+}
+
+.mitti-gradient {
+  background: linear-gradient(135deg, var(--mitti-primary) 0%, var(--mitti-primary-hover) 100%);
+}
+
+.mitti-shadow {
+  box-shadow: 0 4px 12px var(--mitti-shadow);
+}
+
+.mitti-border {
+  border: 2px solid var(--mitti-secondary);
+}
+
+/* Responsive visibility utilities */
+.show-mobile { display: none; }
+.show-tablet { display: none; }
+.show-desktop { display: block; }
+
+@media (max-width: 767px) {
+  .show-mobile { display: block; }
+  .hide-mobile { display: none; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .show-tablet { display: block; }
+  .hide-tablet { display: none; }
+}
+
+@media (min-width: 1024px) {
+  .show-desktop { display: block; }
+  .hide-desktop { display: none; }
+}

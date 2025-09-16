@@ -84,6 +84,9 @@ export const updateMainStore = createAsyncThunk(
   }
 );
 
+// Track if default branch initialization is in progress
+let isInitializingDefaultBranch = false;
+
 // Async thunks for branches
 export const fetchBranches = createAsyncThunk(
   'storefront/fetchBranches',
@@ -94,42 +97,64 @@ export const fetchBranches = createAsyncThunk(
       };
 
       const branches = await firebaseService.getAll('branches', options);
-      
-      // If no branches exist, create default ones
-      if (branches.length === 0) {
-        const defaultBranches = [
-          {
-            name: 'Main Showroom',
-            type: 'permanent',
-            address: {
-              street: 'Plot No. 123, Banjara Hills, Road No. 12',
-              city: 'Hyderabad',
-              state: 'Telangana',
-              pincode: '500034'
-            },
-            contact: {
-              phone: '+91 98765 43210',
-              email: 'sales@mittiarts.com'
-            },
-            manager: 'Suresh Reddy',
-            establishedDate: '2020-01-15',
-            status: 'active',
-            monthlyRevenue: 250000,
-            employeeCount: 8,
-            isMainBranch: true
-          }
-        ];
-
-        const createdBranches = [];
-        for (const branchData of defaultBranches) {
-          const branch = await firebaseService.create('branches', branchData);
-          createdBranches.push(branch);
-        }
-        return createdBranches;
-      }
-
       return branches;
     } catch (error) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+// Separate thunk for initializing default branch (call only once)
+export const initializeDefaultBranch = createAsyncThunk(
+  'storefront/initializeDefaultBranch',
+  async (_, { rejectWithValue }) => {
+    try {
+      // Prevent multiple simultaneous calls
+      if (isInitializingDefaultBranch) {
+        throw new Error('Default branch initialization already in progress');
+      }
+
+      isInitializingDefaultBranch = true;
+
+      const branches = await firebaseService.getAll('branches', {});
+
+      // Check if Main Showroom already exists
+      const mainShowroomExists = branches.some(branch =>
+        branch.name === 'Main Showroom' || branch.isMainBranch === true
+      );
+
+      // Only create if no branches exist and no main showroom exists
+      if (branches.length === 0 || !mainShowroomExists) {
+        const defaultBranch = {
+          name: 'Main Showroom',
+          type: 'permanent',
+          address: {
+            street: 'Plot No. 123, Banjara Hills, Road No. 12',
+            city: 'Hyderabad',
+            state: 'Telangana',
+            pincode: '500034'
+          },
+          contact: {
+            phone: '+91 98765 43210',
+            email: 'sales@mittiarts.com'
+          },
+          manager: 'Suresh Reddy',
+          establishedDate: '2020-01-15',
+          status: 'active',
+          monthlyRevenue: 250000,
+          employeeCount: 8,
+          isMainBranch: true
+        };
+
+        const createdBranch = await firebaseService.create('branches', defaultBranch);
+        isInitializingDefaultBranch = false;
+        return [createdBranch];
+      }
+
+      isInitializingDefaultBranch = false;
+      return branches;
+    } catch (error) {
+      isInitializingDefaultBranch = false;
       return rejectWithValue(error.message);
     }
   }
@@ -354,6 +379,10 @@ const storefrontSlice = createSlice({
       .addCase(fetchBranches.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      // Initialize default branch
+      .addCase(initializeDefaultBranch.fulfilled, (state, action) => {
+        state.branches = action.payload;
       })
       .addCase(createBranch.fulfilled, (state, action) => {
         state.branches.unshift(action.payload);

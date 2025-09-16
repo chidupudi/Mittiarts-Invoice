@@ -53,6 +53,7 @@ import {
 import { fetchOrders } from '../../features/order/orderSlice';
 import { fetchProducts } from '../../features/products/productSlice';
 import { fetchCustomers } from '../../features/customer/customerSlice';
+import firebaseService from '../../services/firebaseService';
 
 import moment from 'moment';
 
@@ -103,10 +104,15 @@ const StatCard = ({ title, value, icon, color, trend, trendValue, prefix, suffix
 
 const Dashboard = () => {
   const dispatch = useDispatch();
-  
+
   const { items: orders = [], loading: ordersLoading } = useSelector(state => state.orders);
   const { items: products = [], loading: productsLoading } = useSelector(state => state.products);
   const { items: customers = [], loading: customersLoading } = useSelector(state => state.customers);
+
+  // Admin analytics state
+  const [businessAnalytics, setBusinessAnalytics] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const [dateFilter, setDateFilter] = useState('week'); // week, 2weeks, month
   const [dashboardData, setDashboardData] = useState({
@@ -131,7 +137,30 @@ const Dashboard = () => {
     dispatch(fetchOrders({}));
     dispatch(fetchProducts({}));
     dispatch(fetchCustomers({}));
+
+    // Check if user is admin and load business analytics
+    loadAdminAnalytics();
   }, [dispatch]);
+
+  const loadAdminAnalytics = async () => {
+    try {
+      setAnalyticsLoading(true);
+
+      // Check admin status
+      const adminStatus = firebaseService.isAdmin();
+      setIsAdmin(adminStatus);
+
+      if (adminStatus) {
+        // Load comprehensive business analytics for admin
+        const analytics = await firebaseService.getBusinessAnalytics();
+        setBusinessAnalytics(analytics);
+      }
+    } catch (error) {
+      console.error('Error loading admin analytics:', error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Calculate dashboard metrics when data changes
@@ -499,16 +528,147 @@ const Dashboard = () => {
             </Text>
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <Text style={{ color: 'rgba(255,255,255,0.8)' }}>Time Period:</Text>
-          <br />
-          <Select value={dateFilter} onChange={setDateFilter} style={{ width: 120 }}>
-            <Option value="week">1 Week</Option>
-            <Option value="2weeks">2 Weeks</Option>
-            <Option value="month">1 Month</Option>
-          </Select>
+        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* Admin Badge */}
+          {isAdmin && (
+            <Tag color="gold" style={{ fontSize: '14px', padding: '4px 12px' }}>
+              👑 ADMIN ACCESS
+            </Tag>
+          )}
+
+          <div>
+            <Text style={{ color: 'rgba(255,255,255,0.8)' }}>Time Period:</Text>
+            <br />
+            <Select value={dateFilter} onChange={setDateFilter} style={{ width: 120 }}>
+              <Option value="week">1 Week</Option>
+              <Option value="2weeks">2 Weeks</Option>
+              <Option value="month">1 Month</Option>
+            </Select>
+          </div>
         </div>
       </div>
+
+      {/* Admin Analytics Section */}
+      {isAdmin && businessAnalytics && (
+        <>
+          <Alert
+            message="Admin View Active"
+            description="You are viewing comprehensive business analytics across all users and branches."
+            type="info"
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+
+          {/* Business Overview Cards */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic
+                  title="Total Business Revenue"
+                  value={businessAnalytics.overview.totalRevenue}
+                  precision={0}
+                  valueStyle={{ color: '#3f8600' }}
+                  prefix="₹"
+                  suffix={<ArrowUpOutlined />}
+                />
+                <Text type="secondary">Across all users</Text>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic
+                  title="Total Orders"
+                  value={businessAnalytics.overview.totalOrders}
+                  valueStyle={{ color: '#1890ff' }}
+                  prefix={<ShoppingCartOutlined />}
+                />
+                <Text type="secondary">All branches combined</Text>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic
+                  title="Total Customers"
+                  value={businessAnalytics.overview.totalCustomers}
+                  valueStyle={{ color: '#722ed1' }}
+                  prefix={<UserOutlined />}
+                />
+                <Text type="secondary">Platform-wide</Text>
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={8} lg={6}>
+              <Card>
+                <Statistic
+                  title="Active Branches"
+                  value={businessAnalytics.overview.activeBranches}
+                  valueStyle={{ color: '#eb2f96' }}
+                  prefix="🏪"
+                />
+                <Text type="secondary">Operational locations</Text>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* Growth and Performance Metrics */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            <Col xs={24} lg={12}>
+              <Card title="📈 Revenue Growth" extra={<LineChartOutlined />}>
+                <Row gutter={[16, 16]}>
+                  <Col span={12}>
+                    <Statistic
+                      title="This Month"
+                      value={businessAnalytics.revenue.thisMonth}
+                      precision={0}
+                      prefix="₹"
+                      valueStyle={{ color: '#3f8600' }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Statistic
+                      title="Growth Rate"
+                      value={businessAnalytics.revenue.growth}
+                      precision={1}
+                      suffix="%"
+                      valueStyle={{
+                        color: businessAnalytics.revenue.growth >= 0 ? '#3f8600' : '#cf1322'
+                      }}
+                      prefix={businessAnalytics.revenue.growth >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                    />
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+            <Col xs={24} lg={12}>
+              <Card title="🎯 Estimate Performance">
+                <Row gutter={[16, 16]}>
+                  <Col span={12}>
+                    <Statistic
+                      title="Conversion Rate"
+                      value={businessAnalytics.estimates.conversionRate}
+                      precision={1}
+                      suffix="%"
+                      valueStyle={{ color: '#1890ff' }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Statistic
+                      title="Pending Estimates"
+                      value={businessAnalytics.estimates.pending}
+                      valueStyle={{ color: '#fa8c16' }}
+                    />
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+          </Row>
+
+          <Divider orientation="left">
+            <Text style={{ color: '#8b4513', fontSize: '16px', fontWeight: 'bold' }}>
+              📊 Regular Dashboard (Your Data)
+            </Text>
+          </Divider>
+        </>
+      )}
 
       {/* Cost Price Warning */}
       {costWarning && (

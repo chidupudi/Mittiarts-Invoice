@@ -1,4 +1,4 @@
-// src/components/public/PublicInvoice.js - Updated to use Share Token
+// src/components/public/PublicEstimate.js
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -20,7 +20,8 @@ import {
   PhoneOutlined,
   PrinterOutlined,
   SafetyCertificateOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -29,7 +30,7 @@ import firebaseService from '../../services/firebaseService';
 
 const { Title, Text } = Typography;
 
-// Store Information
+// Store Information (same as invoice/estimate)
 const MAIN_STORE_INFO = {
   name: 'ART OF INDIAN POTTERY',
   subtitle: 'Mfr: Pottery Articulture, Eco-Ganesha, Eco-Filters, Cooking Pots, Diyas, Terracotta, Sculptures, and all types of art works',
@@ -41,13 +42,13 @@ const MAIN_STORE_INFO = {
   logo: 'https://ik.imagekit.io/mittiarts/Logo%20final%20jpg.jpg?updatedAt=1753566864506'
 };
 
-const invoiceStyles = `
+const estimateStyles = `
   @media print {
     body { margin: 0; }
     .no-print { display: none !important; }
   }
   
-  .invoice-container {
+  .estimate-container {
     max-width: 800px;
     margin: 0 auto;
     background: white;
@@ -56,7 +57,7 @@ const invoiceStyles = `
     font-size: 12px;
   }
   
-  .invoice-header {
+  .estimate-header {
     text-align: center;
     padding: 15px;
     border-bottom: 1px solid #000;
@@ -91,7 +92,7 @@ const invoiceStyles = `
     line-height: 1.3;
   }
   
-  .invoice-title {
+  .estimate-title {
     text-align: center;
     padding: 8px;
     border-bottom: 1px solid #000;
@@ -107,13 +108,13 @@ const invoiceStyles = `
     font-weight: bold;
   }
   
-  .invoice-info {
+  .estimate-info {
     display: flex;
     padding: 10px;
     border-bottom: 1px solid #000;
   }
   
-  .invoice-details {
+  .estimate-details {
     flex: 1;
     border-right: 1px solid #000;
     padding-right: 10px;
@@ -130,12 +131,23 @@ const invoiceStyles = `
     text-align: right;
   }
   
-  .advance-alert {
+  .validity-alert {
     padding: 10px;
     background-color: #fff7e6;
     border-bottom: 1px solid #000;
     text-align: center;
     border-left: 4px solid #fa8c16;
+    font-weight: bold;
+  }
+  
+  .expired-alert {
+    padding: 10px;
+    background-color: #fff2f0;
+    border-bottom: 1px solid #000;
+    text-align: center;
+    border-left: 4px solid #ff4d4f;
+    font-weight: bold;
+    color: #cf1322;
   }
   
   .items-table {
@@ -162,10 +174,10 @@ const invoiceStyles = `
   
   .totals-section {
     display: flex;
-    min-height: 100px;
+    min-height: 120px;
   }
   
-  .amount-words {
+  .notes-section {
     flex: 1;
     border-right: 1px solid #000;
     padding: 15px;
@@ -216,101 +228,66 @@ const invoiceStyles = `
   }
 `;
 
-const PublicInvoice = () => {
-  const { token } = useParams(); // This is the shareToken now
-  const [order, setOrder] = useState(null);
+const PublicEstimate = () => {
+  const { token } = useParams(); // This is the shareToken
+  const [estimate, setEstimate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (token) {
-      fetchInvoiceByToken();
+      fetchEstimateByToken();
     } else {
-      setError('Invalid invoice link');
+      setError('Invalid estimate link');
       setLoading(false);
     }
   }, [token]);
 
-  const fetchInvoiceByToken = async () => {
+  const fetchEstimateByToken = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const clientIp = getClientIP();
-      // 🆕 USE NEW SHARE TOKEN METHOD
-      const orderData = await firebaseService.getOrderByShareToken(token, clientIp);
-      setOrder(orderData);
+      // Get estimate by share token using public access method
+      const estimateData = await firebaseService.getEstimateByShareToken(token);
+
+      // Enrich with customer data
+      if (estimateData.customerId) {
+        try {
+          const customer = await firebaseService.getById('customers', estimateData.customerId);
+          estimateData.customer = customer;
+        } catch (error) {
+          console.warn('Customer not found:', error);
+        }
+      }
+
+      // Check validity
+      const expiryDate = moment(estimateData.createdAt?.toDate ? estimateData.createdAt.toDate() : estimateData.createdAt).add(3, 'months');
+      estimateData.isExpired = moment().isAfter(expiryDate);
+      estimateData.expiryDate = expiryDate.toDate();
+      estimateData.daysToExpiry = expiryDate.diff(moment(), 'days');
+
+      setEstimate(estimateData);
     } catch (err) {
-      console.error('Error accessing public invoice:', err);
+      console.error('Error accessing public estimate:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const getClientIP = () => {
-    // Simple IP detection - in production, use proper IP detection
-    return 'visitor_ip';
-  };
-
-  // Convert number to words
-  const numberToWords = (amount) => {
-    if (amount === 0) return "Zero Rupees Only";
-    
-    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-    const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-    
-    const convertHundreds = (num) => {
-      let result = "";
-      if (num > 99) {
-        result += ones[Math.floor(num / 100)] + " Hundred ";
-        num %= 100;
-      }
-      if (num > 19) {
-        result += tens[Math.floor(num / 10)] + " ";
-        num %= 10;
-      } else if (num > 9) {
-        result += teens[num - 10] + " ";
-        return result;
-      }
-      if (num > 0) {
-        result += ones[num] + " ";
-      }
-      return result;
-    };
-    
-    const integerPart = Math.floor(amount);
-    let words = "";
-    
-    if (integerPart > 99999) {
-      words += convertHundreds(Math.floor(integerPart / 100000)) + "Lakh ";
-      integerPart %= 100000;
-    }
-    
-    if (integerPart > 999) {
-      words += convertHundreds(Math.floor(integerPart / 1000)) + "Thousand ";
-      integerPart %= 1000;
-    }
-    
-    words += convertHundreds(integerPart);
-    words += "Rupees Only";
-    
-    return words;
-  };
-
   const handleDownloadPDF = async () => {
-    if (!order) return;
+    if (!estimate) return;
     
     setDownloading(true);
     try {
-      const element = document.getElementById('invoice-content');
+      const element = document.getElementById('estimate-content');
       if (!element) {
-        throw new Error('Invoice content not found');
+        throw new Error('Estimate content not found');
       }
 
-      message.loading('Generating your Mitti Arts invoice PDF...', 2);
+      message.loading('Generating your Mitti Arts estimate PDF...', 2);
 
       const canvas = await html2canvas(element, {
         scale: 2,
@@ -337,15 +314,15 @@ const PublicInvoice = () => {
 
       pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
       
-      const fileName = `Mitti-Arts-Invoice-${order.orderNumber}-${moment().format('YYYY-MM-DD')}.pdf`;
+      const fileName = `Mitti-Arts-Estimate-${estimate.estimateNumber}-${moment().format('YYYY-MM-DD')}.pdf`;
       pdf.save(fileName);
       
       message.destroy();
-      message.success('Invoice downloaded successfully! 🎉');
+      message.success('Estimate downloaded successfully! 🎉');
     } catch (error) {
       console.error('Error generating PDF:', error);
       message.destroy();
-      message.error('Failed to download invoice. Please try again or contact us.');
+      message.error('Failed to download estimate. Please try again or contact us.');
     } finally {
       setDownloading(false);
     }
@@ -370,13 +347,13 @@ const PublicInvoice = () => {
         background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
       }}>
         <Card style={{ padding: '40px', textAlign: 'center', borderRadius: '12px', maxWidth: '400px' }}>
-          <div style={{ fontSize: '48px', marginBottom: 16 }}>🏺</div>
+          <div style={{ fontSize: '48px', marginBottom: 16 }}>📋</div>
           <Spin size="large" />
           <Title level={4} style={{ marginTop: 16, color: '#8b4513' }}>
-            Loading Your Mitti Arts Invoice
+            Loading Your Mitti Arts Estimate
           </Title>
           <Text type="secondary">
-            Fetching your handcrafted pottery invoice details...
+            Fetching your handcrafted pottery estimate details...
           </Text>
           <div style={{ marginTop: 16 }}>
             <Text style={{ fontSize: '12px', color: '#666' }}>
@@ -401,13 +378,13 @@ const PublicInvoice = () => {
       }}>
         <Card style={{ maxWidth: 600, textAlign: 'center', borderRadius: '12px' }}>
           <Result
-            icon={<div style={{ fontSize: '72px' }}>🏺</div>}
+            icon={<div style={{ fontSize: '72px' }}>📋</div>}
             title={<Title level={3} style={{ color: '#8b4513' }}>Mitti Arts</Title>}
             status="error"
             subTitle={
               <div>
                 <Alert
-                  message="Invoice Not Found"
+                  message="Estimate Not Found"
                   description={error}
                   type="error"
                   showIcon
@@ -417,8 +394,9 @@ const PublicInvoice = () => {
                 <div style={{ marginTop: 16, fontSize: '14px', color: '#666', textAlign: 'left' }}>
                   <Title level={5}>What you can do:</Title>
                   <ul style={{ paddingLeft: '20px' }}>
-                    <li>Contact us for a new invoice link</li>
+                    <li>Contact us for a new estimate link</li>
                     <li>Check if you copied the complete link</li>
+                    <li>The estimate may have expired (3 months validity)</li>
                     <li>Try refreshing the page</li>
                   </ul>
                 </div>
@@ -459,11 +437,13 @@ const PublicInvoice = () => {
     );
   }
 
-  if (!order) {
+  if (!estimate) {
     return null;
   }
 
-  const finalTotal = order.total || 0;
+  const finalTotal = estimate.total || 0;
+  const isExpired = estimate.isExpired;
+  const daysToExpiry = estimate.daysToExpiry;
 
   return (
     <div style={{
@@ -471,7 +451,7 @@ const PublicInvoice = () => {
       background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
       padding: '20px'
     }}>
-      <style>{invoiceStyles}</style>
+      <style>{estimateStyles}</style>
       
       {/* Header with download button */}
       <div style={{ maxWidth: '800px', margin: '0 auto', marginBottom: '20px' }}>
@@ -490,20 +470,33 @@ const PublicInvoice = () => {
                   color: 'white',
                   fontSize: '24px'
                 }}>
-                  🏺
+                  📋
                 </div>
                 <div>
                   <Title level={4} style={{ margin: 0, color: '#8b4513' }}>
-                    Your Mitti Arts Invoice
+                    Your Mitti Arts Estimate
                   </Title>
-                  <Text type="secondary">Thank you for choosing handcrafted pottery!</Text>
+                  <Text type="secondary">Handcrafted pottery estimate from our artisans</Text>
                   <div style={{ marginTop: 4 }}>
                     <Tag color="green" size="small">
                       <SafetyCertificateOutlined /> Secure Access
                     </Tag>
                     <Tag color="#8b4513" size="small">
-                      Order: {order.orderNumber}
+                      Estimate: {estimate.estimateNumber}
                     </Tag>
+                    {isExpired ? (
+                      <Tag color="red" size="small">
+                        <ExclamationCircleOutlined /> Expired
+                      </Tag>
+                    ) : daysToExpiry <= 7 ? (
+                      <Tag color="orange" size="small">
+                        <ClockCircleOutlined /> Expires in {daysToExpiry} days
+                      </Tag>
+                    ) : (
+                      <Tag color="blue" size="small">
+                        <CheckCircleOutlined /> Valid for {daysToExpiry} days
+                      </Tag>
+                    )}
                   </div>
                 </div>
               </Space>
@@ -537,12 +530,12 @@ const PublicInvoice = () => {
         </Card>
       </div>
 
-      {/* Invoice Content */}
+      {/* Estimate Content */}
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        <div id="invoice-content" className="invoice-container" style={{ color: '#000' }}>
+        <div id="estimate-content" className="estimate-container">
           
           {/* Header */}
-          <div className="invoice-header">
+          <div className="estimate-header">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
               <div className="logo-container">
                 <img 
@@ -572,9 +565,9 @@ const PublicInvoice = () => {
             </div>
           </div>
 
-          {/* TAX INVOICE Title */}
-          <div className="invoice-title">
-            TAX INVOICE
+          {/* ESTIMATE Title */}
+          <div className="estimate-title">
+            ESTIMATE
           </div>
 
           {/* GSTIN */}
@@ -582,42 +575,44 @@ const PublicInvoice = () => {
             GSTIN: {MAIN_STORE_INFO.gstin}
           </div>
 
-          {/* Invoice Details Section */}
-          <div className="invoice-info">
-            <div className="invoice-details">
-              <div><strong>P.O. No.</strong></div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
+          {/* Estimate Details Section */}
+          <div className="estimate-info">
+            <div className="estimate-details">
+              <div><strong>Estimate No.</strong> {estimate.estimateNumber}</div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(estimate.createdAt?.toDate?.() || estimate.createdAt).format('DD/MM/YYYY')}</div>
             </div>
             <div style={{ flex: 1, borderRight: '1px solid #000', borderLeft: '1px solid #000', paddingLeft: '10px', paddingRight: '10px' }}>
-              <div><strong>DC No.</strong></div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong></div>
+              <div><strong>Valid Until:</strong></div>
+              <div style={{ marginTop: '15px' }}><strong>{moment(estimate.expiryDate).format('DD/MM/YYYY')}</strong></div>
             </div>
             <div className="customer-details">
-              <div><strong>Invoice No.</strong> {order.orderNumber}</div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
+              <div><strong>Business Type:</strong> {estimate.businessType === 'wholesale' ? 'Wholesale' : 'Retail'}</div>
+              <div style={{ marginTop: '15px' }}><strong>Branch:</strong> {estimate.branchInfo?.name || 'Main Branch'}</div>
             </div>
           </div>
 
           {/* Customer Details */}
           <div className="customer-section">
-            <div><strong>M/s. {order.customer?.name || 'Walk-in Customer'}</strong></div>
-            {order.customer?.phone && (
-              <div style={{ marginTop: '5px' }}>Ph: {order.customer.phone}</div>
+            <div><strong>M/s. {estimate.customer?.name || 'Walk-in Customer'}</strong></div>
+            {estimate.customer?.phone && (
+              <div style={{ marginTop: '5px' }}>Ph: {estimate.customer.phone}</div>
             )}
-            {order.customer?.email && (
-              <div style={{ marginTop: '5px' }}>Email: {order.customer.email}</div>
+            {estimate.customer?.email && (
+              <div style={{ marginTop: '5px' }}>Email: {estimate.customer.email}</div>
             )}
             <div style={{ marginTop: '10px' }}>
               <strong>GSTIN: ________________________________</strong>
             </div>
           </div>
 
-          {/* Advance Payment Alert */}
-          {order.isAdvanceBilling && order.remainingAmount > 0 && (
-            <div className="advance-alert">
-              <strong style={{ color: '#fa8c16' }}>
-                ⚠️ ADVANCE PAYMENT INVOICE - Balance Due: ₹{order.remainingAmount?.toFixed(2)}
-              </strong>
+          {/* Validity Alert */}
+          {isExpired ? (
+            <div className="expired-alert">
+              ⚠️ THIS ESTIMATE HAS EXPIRED • Please contact us for updated pricing and availability
+            </div>
+          ) : (
+            <div className="validity-alert">
+              This estimate is valid for 3 months from the date of issue • Expires: {moment(estimate.expiryDate).format('DD/MM/YYYY')}
             </div>
           )}
 
@@ -634,7 +629,7 @@ const PublicInvoice = () => {
               </tr>
             </thead>
             <tbody>
-              {order.items.map((item, index) => (
+              {estimate.items.map((item, index) => (
                 <tr key={index}>
                   <td className="text-center">{index + 1}</td>
                   <td className="text-center">-</td>
@@ -644,8 +639,8 @@ const PublicInvoice = () => {
                   <td className="text-right">₹{(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
               ))}
-              {/* Empty rows for padding */}
-              {Array.from({ length: Math.max(0, 10 - order.items.length) }).map((_, index) => (
+              {/* Empty rows to complete 8 rows */}
+              {Array.from({ length: Math.max(0, 8 - estimate.items.length) }).map((_, index) => (
                 <tr key={`empty-${index}`} style={{ height: '30px' }}>
                   <td>&nbsp;</td>
                   <td>&nbsp;</td>
@@ -658,31 +653,29 @@ const PublicInvoice = () => {
             </tbody>
           </table>
 
-          {/* Totals Section */}
+          {/* Totals Section with Notes */}
           <div className="totals-section">
-            <div className="amount-words">
-              <strong>Amount in Words:</strong>
-              <div style={{ marginTop: '10px', lineHeight: '1.4' }}>
-                {numberToWords(finalTotal)}
+            <div className="notes-section">
+              <strong>Notes & Terms:</strong>
+              <div style={{ marginTop: '10px', lineHeight: '1.4', minHeight: '60px' }}>
+                {estimate.notes || 'No additional notes provided.'}
               </div>
-              {/* Advance payment info */}
-              {order.isAdvanceBilling && (
-                <div style={{ marginTop: '20px', fontSize: '11px', lineHeight: '1.3' }}>
-                  <div><strong>Payment Summary:</strong></div>
-                  <div>Total Amount: ₹{finalTotal.toFixed(2)}</div>
-                  <div style={{ color: '#52c41a' }}>Advance Paid: ₹{(order.advanceAmount || 0).toFixed(2)}</div>
-                  {order.remainingAmount > 0 && (
-                    <div style={{ color: '#fa541c' }}>
-                      <strong>Balance Due: ₹{order.remainingAmount.toFixed(2)}</strong>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div style={{ marginTop: '15px', fontSize: '10px', color: '#666' }}>
+                <div><strong>Terms & Conditions:</strong></div>
+                <div>• This estimate is valid for 3 months from issue date</div>
+                <div>• Prices may vary based on final specifications</div>
+                <div>• All pottery items are handcrafted and may have natural variations</div>
+                <div>• Final invoice will be generated upon order confirmation</div>
+                <div>• Contact us to place your order: {MAIN_STORE_INFO.phone}</div>
+              </div>
             </div>
             <div className="totals-column">
               <div>
-                <div style={{ fontSize: '14px', marginBottom: '5px' }}>TOTAL</div>
+                <div style={{ fontSize: '14px', marginBottom: '5px' }}>ESTIMATED TOTAL</div>
                 <div style={{ fontSize: '20px', color: '#8b4513' }}>₹{finalTotal.toFixed(2)}</div>
+                <div style={{ fontSize: '10px', marginTop: '8px', color: '#666' }}>
+                  ({estimate.businessType === 'wholesale' ? 'Wholesale' : 'Retail'} Pricing)
+                </div>
               </div>
             </div>
           </div>
@@ -713,57 +706,82 @@ const PublicInvoice = () => {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ marginBottom: '5px' }}>
-                <strong>USE ECO-FRIENDLY SAVE HEALTH & EARTH</strong>
+                <strong>HANDCRAFTED POTTERY • ECO-FRIENDLY • TRADITIONAL ART</strong>
               </div>
               <div style={{ fontSize: '10px' }}>
-                Visit: {MAIN_STORE_INFO.website}
+                Visit: {MAIN_STORE_INFO.website} • This is an estimate, not a tax invoice
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Payment Status for Public Invoice */}
-      {order.isAdvanceBilling && order.remainingAmount > 0 && (
-        <div style={{ maxWidth: '800px', margin: '20px auto 0', textAlign: 'center' }}>
-          <Card style={{ borderRadius: '12px', backgroundColor: '#fff7e6', border: '1px solid #ffd591' }} className="no-print">
-            <Space direction="vertical" size="small">
-              <Title level={5} style={{ margin: 0, color: '#fa8c16' }}>
-                <ClockCircleOutlined /> Partial Payment - Balance Pending
-              </Title>
-              <Text>
-                You have paid ₹{(order.advanceAmount || 0).toFixed(2)} as advance payment.
+      {/* Contact Section for estimates */}
+      <div style={{ maxWidth: '800px', margin: '20px auto 0', textAlign: 'center' }}>
+        <Card 
+          style={{ 
+            borderRadius: '12px', 
+            backgroundColor: isExpired ? '#fff2f0' : '#f6ffed', 
+            border: `1px solid ${isExpired ? '#ffccc7' : '#b7eb8f'}` 
+          }} 
+          className="no-print"
+        >
+          <Space direction="vertical" size="small">
+            <Title level={5} style={{ margin: 0, color: isExpired ? '#cf1322' : '#52c41a' }}>
+              {isExpired ? (
+                <>
+                  <ExclamationCircleOutlined /> Estimate Expired - Contact Us for Updated Pricing
+                </>
+              ) : (
+                <>
+                  <CheckCircleOutlined /> Ready to Place Your Order?
+                </>
+              )}
+            </Title>
+            <Text>
+              {isExpired ? (
+                <>This estimate has expired, but we'd love to provide you with updated pricing for our handcrafted pottery items.</>
+              ) : (
+                <>Contact us to confirm your order and we'll create your official invoice. All pottery items are handcrafted by our skilled artisans.</>
+              )}
+            </Text>
+            <div style={{ marginTop: 8 }}>
+              <Button
+                type="primary"
+                icon={<PhoneOutlined />}
+                onClick={handleContactUs}
+                style={{
+                  background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
+                  border: 'none',
+                  marginRight: 8
+                }}
+              >
+                Call Now to Order
+              </Button>
+              <Button
+                onClick={() => window.location.href = `mailto:${MAIN_STORE_INFO.email}`}
+              >
+                Email Us
+              </Button>
+            </div>
+            <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
+              <Text type="secondary">
+                📞 {MAIN_STORE_INFO.phone} • 📧 {MAIN_STORE_INFO.email} • 🌐 {MAIN_STORE_INFO.website}
               </Text>
-              <Text strong style={{ color: '#fa541c' }}>
-                Remaining balance: ₹{order.remainingAmount.toFixed(2)}
-              </Text>
-              <div style={{ marginTop: 8 }}>
-                <Button
-                  type="primary"
-                  icon={<PhoneOutlined />}
-                  onClick={handleContactUs}
-                  style={{
-                    background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
-                    border: 'none'
-                  }}
-                >
-                  Contact Us for Final Payment
-                </Button>
-              </div>
-            </Space>
-          </Card>
-        </div>
-      )}
+            </div>
+          </Space>
+        </Card>
+      </div>
 
       {/* Thank you message */}
       <div style={{ maxWidth: '800px', margin: '20px auto 0', textAlign: 'center' }}>
-        <Card style={{ borderRadius: '12px', backgroundColor: '#f6ffed', border: '1px solid #b7eb8f' }} className="no-print">
+        <Card style={{ borderRadius: '12px', backgroundColor: '#f0f5ff', border: '1px solid #adc6ff' }} className="no-print">
           <Space direction="vertical" size="small">
-            <Title level={5} style={{ margin: 0, color: '#52c41a' }}>
-              🎉 Thank you for supporting traditional Indian pottery craftsmanship!
+            <Title level={5} style={{ margin: 0, color: '#1890ff' }}>
+              🏺 Thank you for choosing Mitti Arts for your pottery needs!
             </Title>
             <Text type="secondary">
-              For any queries, call us at {MAIN_STORE_INFO.phone}
+              Experience the beauty of traditional Indian pottery craftsmanship with our eco-friendly, handmade creations.
             </Text>
           </Space>
         </Card>
@@ -772,4 +790,4 @@ const PublicInvoice = () => {
   );
 };
 
-export default PublicInvoice;
+export default PublicEstimate;

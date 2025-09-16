@@ -14,12 +14,14 @@ import {
   message,
   Form,
   Badge,
-  Button
+  Button,
+  Alert
 } from 'antd';
 import {
   ShoppingCartOutlined,
   InfoCircleOutlined,
-  PayCircleOutlined
+  PayCircleOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import { fetchBranches, fetchStalls } from '../../features/storefront/storefrontSlice';
 import { 
@@ -32,7 +34,7 @@ import {
 } from '../../features/order/orderSlice';
 import { fetchCustomers, createCustomer } from '../../features/customer/customerSlice';
 import { fetchProducts, createProduct } from '../../features/products/productSlice';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Import components
 import ProductSelection from './ProductSelection';
@@ -60,6 +62,7 @@ const { Title, Text } = Typography;
 
 const Billing = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
 
   // Redux state
@@ -94,6 +97,10 @@ const Billing = () => {
   // Payment confirmation states
   const [finalPaymentMethod, setFinalPaymentMethod] = useState('Cash');
   const [selectedBank, setSelectedBank] = useState(undefined);
+
+  // Estimate conversion states
+  const [convertFromEstimate, setConvertFromEstimate] = useState(null);
+  const [isConvertingEstimate, setIsConvertingEstimate] = useState(false);
 
   const bankDetails = [
     'Art of Indian pottery',
@@ -141,6 +148,50 @@ const Billing = () => {
       setSelectedBranch(defaultLocation.id);
     }
   }, [locations, selectedBranch]);
+
+  // Handle estimate conversion
+  useEffect(() => {
+    if (location.state?.convertFromEstimate) {
+      const estimate = location.state.convertFromEstimate;
+      console.log('Converting estimate to invoice:', estimate);
+      
+      setConvertFromEstimate(estimate);
+      setIsConvertingEstimate(true);
+      
+      if (location.state.prefilledCustomer) {
+        setSelectedCustomer(location.state.prefilledCustomer);
+      }
+      
+      if (location.state.prefilledBusinessType) {
+        setBusinessType(location.state.prefilledBusinessType);
+      }
+      
+      if (location.state.prefilledBranch) {
+        setSelectedBranch(location.state.prefilledBranch);
+      }
+      
+      if (location.state.prefilledItems) {
+        dispatch(clearCart());
+        
+        setTimeout(() => {
+          location.state.prefilledItems.forEach(item => {
+            dispatch(addToCart({
+              product: item.product,
+              quantity: item.quantity,
+              originalPrice: item.originalPrice || item.price,
+              currentPrice: item.currentPrice || item.price,
+              businessType: location.state.prefilledBusinessType,
+              branch: location.state.prefilledBranch
+            }));
+          });
+          
+          message.success(`Estimate ${estimate.estimateNumber} loaded! Review and generate invoice.`);
+        }, 100);
+      }
+      
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, dispatch, setSelectedCustomer, setBusinessType, setSelectedBranch]);
 
   // Update advance calculation when cart or advance amount changes
   useEffect(() => {
@@ -317,18 +368,35 @@ const Billing = () => {
       advanceAmount,
       remainingAmount,
       finalPaymentMethod,
-      selectedBank
+      selectedBank,
+      convertedFromEstimate: convertFromEstimate ? {
+        estimateId: convertFromEstimate.id,
+        estimateNumber: convertFromEstimate.estimateNumber,
+        convertedAt: new Date()
+      } : null
     });
 
     const result = await dispatch(createOrder(orderData));
     if (result.type === 'orders/create/fulfilled') {
       message.success(`${isAdvanceBilling ? 'Advance invoice' : 'Invoice'} generated successfully!`);
+      
+      if (convertFromEstimate) {
+        try {
+          message.success(`Estimate ${convertFromEstimate.estimateNumber} converted to invoice successfully!`);
+        } catch (error) {
+          console.warn('Failed to update estimate status:', error);
+        }
+      }
+      
       dispatch(clearCart());
       setShowPaymentModal(false);
       setShowAdvanceModal(false);
       setIsAdvanceBilling(false);
       setAdvanceAmount(0);
       setRemainingAmount(0);
+      setIsConvertingEstimate(false);
+      setConvertFromEstimate(null);
+      
       navigate(`/invoices/${result.payload.id}`);
     }
   };
@@ -370,9 +438,14 @@ const Billing = () => {
                 🏺
               </div>
               <div>
-                <Title level={4} style={{ margin: 0, color: 'white' }}>Mitti Arts - Point of Sale</Title>
+                <Title level={4} style={{ margin: 0, color: 'white' }}>
+                  Mitti Arts - {isConvertingEstimate ? 'Convert Estimate to Invoice' : 'Point of Sale'}
+                </Title>
                 <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: '12px' }}>
-                  🏺 Handcrafted Pottery & Terracotta Art • {currentLocation?.displayName || 'Loading...'}
+                  {isConvertingEstimate ? 
+                    `🔄 Converting Estimate ${convertFromEstimate?.estimateNumber} • ${currentLocation?.displayName || 'Loading...'}` :
+                    `🏺 Handcrafted Pottery & Terracotta Art • ${currentLocation?.displayName || 'Loading...'}`
+                  }
                 </Text>
               </div>
             </div>
@@ -388,6 +461,52 @@ const Billing = () => {
           </Col>
         </Row>
       </div>
+
+      {isConvertingEstimate && convertFromEstimate && (
+        <Alert
+          message={
+            <Space>
+              <FileTextOutlined />
+              <span><strong>Converting Estimate to Invoice</strong></span>
+            </Space>
+          }
+          description={
+            <div>
+              <div>Estimate Number: <strong>{convertFromEstimate.estimateNumber}</strong></div>
+              <div>Created: <strong>{new Date(convertFromEstimate.createdAt?.toDate?.() || convertFromEstimate.createdAt).toLocaleDateString()}</strong></div>
+              <div>Customer: <strong>{convertFromEstimate.customer?.name || 'Walk-in Customer'}</strong></div>
+              <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+                Review the items and pricing below, make any necessary adjustments, then generate the official invoice.
+              </div>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Space>
+              <Button 
+                size="small" 
+                onClick={() => {
+                  setIsConvertingEstimate(false);
+                  setConvertFromEstimate(null);
+                  dispatch(clearCart());
+                  message.info('Estimate conversion cancelled');
+                }}
+              >
+                Cancel Conversion
+              </Button>
+              <Button 
+                size="small" 
+                type="primary"
+                onClick={() => navigate(`/estimations/${convertFromEstimate.id}`)}
+              >
+                View Original Estimate
+              </Button>
+            </Space>
+          }
+        />
+      )}
 
       <Row gutter={12} style={{ height: 'calc(100% - 80px)' }}>
         <Col xs={24} lg={14} style={{ height: '100%' }}>

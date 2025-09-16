@@ -1,6 +1,6 @@
-// src/components/billing/Invoice.js - Updated with Share Button
+// src/components/estimation/EstimateView.js
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Typography,
@@ -11,15 +11,18 @@ import {
   Spin,
   Space,
   Grid,
-  message
+  message,
+  Tag,
+  Divider
 } from 'antd';
 import { 
   DownloadOutlined, 
   PrinterOutlined,
-  ShareAltOutlined
+  ShareAltOutlined,
+  FileAddOutlined,
+  ArrowLeftOutlined
 } from '@ant-design/icons';
-import { getOrder } from '../../features/order/orderSlice';
-import firebaseService from '../../services/firebaseService';
+import { getEstimate } from '../../features/estimation/estimationSlice';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import moment from 'moment';
@@ -27,7 +30,7 @@ import moment from 'moment';
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
 
-// Store Information
+// Store Information (same as invoice)
 const MAIN_STORE_INFO = {
   name: 'ART OF INDIAN POTTERY',
   subtitle: 'Mfr: Pottery Articulture, Eco-Ganesha, Eco-Filters, Cooking Pots, Diyas, Terracotta, Sculptures, and all types of art works',
@@ -39,13 +42,13 @@ const MAIN_STORE_INFO = {
   logo: 'https://ik.imagekit.io/mittiarts/Logo%20final%20jpg.jpg?updatedAt=1753566864506'
 };
 
-const invoiceStyles = `
+const estimateStyles = `
   @media print {
     body { margin: 0; }
     .no-print { display: none !important; }
   }
   
-  .invoice-container {
+  .estimate-container {
     max-width: 800px;
     margin: 0 auto;
     background: white;
@@ -54,7 +57,7 @@ const invoiceStyles = `
     font-size: 12px;
   }
   
-  .invoice-header {
+  .estimate-header {
     text-align: center;
     padding: 15px;
     border-bottom: 1px solid #000;
@@ -89,7 +92,7 @@ const invoiceStyles = `
     line-height: 1.3;
   }
   
-  .invoice-title {
+  .estimate-title {
     text-align: center;
     padding: 8px;
     border-bottom: 1px solid #000;
@@ -105,13 +108,13 @@ const invoiceStyles = `
     font-weight: bold;
   }
   
-  .invoice-info {
+  .estimate-info {
     display: flex;
     padding: 10px;
     border-bottom: 1px solid #000;
   }
   
-  .invoice-details {
+  .estimate-details {
     flex: 1;
     border-right: 1px solid #000;
     padding-right: 10px;
@@ -126,6 +129,15 @@ const invoiceStyles = `
     padding: 10px;
     border-bottom: 1px solid #000;
     text-align: right;
+  }
+  
+  .validity-alert {
+    padding: 10px;
+    background-color: #fff7e6;
+    border-bottom: 1px solid #000;
+    text-align: center;
+    border-left: 4px solid #fa8c16;
+    font-weight: bold;
   }
   
   .items-table {
@@ -152,10 +164,10 @@ const invoiceStyles = `
   
   .totals-section {
     display: flex;
-    min-height: 100px;
+    min-height: 120px;
   }
   
-  .amount-words {
+  .notes-section {
     flex: 1;
     border-right: 1px solid #000;
     padding: 15px;
@@ -206,18 +218,18 @@ const invoiceStyles = `
   }
 `;
 
-const Invoice = () => {
+const EstimateView = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { currentOrder, isLoading } = useSelector(state => state.orders);
-  const invoiceRef = useRef();
+  const { currentEstimate, loading } = useSelector(state => state.estimations);
+  const estimateRef = useRef();
   const screens = useBreakpoint();
   
-  // 🆕 ADD STATE FOR SHARE LOADING
   const [shareLoading, setShareLoading] = useState(false);
 
   useEffect(() => {
-    dispatch(getOrder(id));
+    dispatch(getEstimate(id));
   }, [dispatch, id]);
 
   const handlePrint = () => {
@@ -225,10 +237,10 @@ const Invoice = () => {
   };
 
   const handleDownload = async () => {
-    if (!invoiceRef.current) return;
+    if (!estimateRef.current) return;
     
     try {
-      const canvas = await html2canvas(invoiceRef.current, {
+      const canvas = await html2canvas(estimateRef.current, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
@@ -251,90 +263,37 @@ const Invoice = () => {
       const imgY = 0;
 
       pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save(`invoice-${currentOrder?.orderNumber || 'invoice'}.pdf`);
+      pdf.save(`estimate-${currentEstimate?.estimateNumber || 'estimate'}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      message.error('Failed to generate PDF');
     }
   };
 
-  // 🆕 UPDATED SHARE FUNCTION - Replace your existing handleShare function with this
   const handleShare = async () => {
-    if (!currentOrder) {
-      message.error('Order not found');
+    if (!currentEstimate) {
+      message.error('Estimate not found');
       return;
     }
 
     setShareLoading(true);
     try {
-      let shareToken = currentOrder.shareToken;
-      
-      // 🆕 If order doesn't have shareToken, generate one
-      if (!shareToken) {
-        console.log('🔧 Generating share token for existing order...');
-        
-        // Generate new token
-        const timestamp = Date.now().toString(36);
-        const random = Math.random().toString(36).substr(2, 8);
-        shareToken = `${timestamp}${random}`;
-        
-        // Save to Firebase
-        await firebaseService.update('orders', currentOrder.id, {
-          shareToken: shareToken,
-          shareTokenGeneratedAt: new Date()
-        });
-        
-        // Update local state
-        currentOrder.shareToken = shareToken;
-        
-        console.log('✅ Share token generated and saved:', shareToken);
-      }
-      
-      // Generate the shareable URL
-      const shareUrl = `${window.location.origin}/public/invoice/${shareToken}`;
-      
-      // Copy to clipboard
+      const shareUrl = `${window.location.origin}/public/estimate/${currentEstimate.shareToken}`;
       await navigator.clipboard.writeText(shareUrl);
-      
-      message.success('🎉 Share link copied to clipboard!');
-      
-      // Log the share action
-      console.log('📤 Invoice shared:', {
-        orderId: currentOrder.id,
-        orderNumber: currentOrder.orderNumber,
-        shareToken: shareToken,
-        shareUrl,
-        sharedAt: new Date().toISOString()
-      });
-      
+      message.success('🎉 Estimate share link copied to clipboard!');
     } catch (error) {
       console.error('Share error:', error);
       
       // Fallback for older browsers
       try {
-        let shareToken = currentOrder.shareToken;
-        
-        if (!shareToken) {
-          const timestamp = Date.now().toString(36);
-          const random = Math.random().toString(36).substr(2, 8);
-          shareToken = `${timestamp}${random}`;
-          
-          await firebaseService.update('orders', currentOrder.id, {
-            shareToken: shareToken,
-            shareTokenGeneratedAt: new Date()
-          });
-          
-          currentOrder.shareToken = shareToken;
-        }
-        
-        const shareUrl = `${window.location.origin}/public/invoice/${shareToken}`;
+        const shareUrl = `${window.location.origin}/public/estimate/${currentEstimate.shareToken}`;
         const textArea = document.createElement('textarea');
         textArea.value = shareUrl;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        
-        message.success('Share link copied to clipboard!');
+        message.success('Estimate share link copied to clipboard!');
       } catch (fallbackError) {
         message.error('Failed to generate share link. Please try again.');
       }
@@ -343,77 +302,76 @@ const Invoice = () => {
     }
   };
 
-  // Convert number to words
-  const numberToWords = (amount) => {
-    if (amount === 0) return "Zero Rupees Only";
-    
-    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-    const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-    
-    const convertHundreds = (num) => {
-      let result = "";
-      if (num > 99) {
-        result += ones[Math.floor(num / 100)] + " Hundred ";
-        num %= 100;
-      }
-      if (num > 19) {
-        result += tens[Math.floor(num / 10)] + " ";
-        num %= 10;
-      } else if (num > 9) {
-        result += teens[num - 10] + " ";
-        return result;
-      }
-      if (num > 0) {
-        result += ones[num] + " ";
-      }
-      return result;
-    };
-    
-    const integerPart = Math.floor(amount);
-    let words = "";
-    
-    if (integerPart > 99999) {
-      words += convertHundreds(Math.floor(integerPart / 100000)) + "Lakh ";
-      integerPart %= 100000;
-    }
-    
-    if (integerPart > 999) {
-      words += convertHundreds(Math.floor(integerPart / 1000)) + "Thousand ";
-      integerPart %= 1000;
-    }
-    
-    words += convertHundreds(integerPart);
-    words += "Rupees Only";
-    
-    return words;
+  const handleConvertToInvoice = () => {
+    navigate('/billing', { 
+      state: { 
+        convertFromEstimate: currentEstimate,
+        prefilledItems: currentEstimate.items,
+        prefilledCustomer: currentEstimate.customer,
+        prefilledBusinessType: currentEstimate.businessType,
+        prefilledBranch: currentEstimate.branch,
+        prefilledNotes: currentEstimate.notes
+      } 
+    });
   };
 
-  if (isLoading || !currentOrder) {
+  if (loading || !currentEstimate) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <Spin size="large" tip="Loading Invoice..." />
+        <Spin size="large" tip="Loading Estimate..." />
       </div>
     );
   }
 
-  const finalTotal = currentOrder.total || 0;
+  const finalTotal = currentEstimate.total || 0;
+  const isExpired = currentEstimate.isExpired;
+  const daysToExpiry = currentEstimate.daysToExpiry;
 
   return (
     <div style={{ padding: screens.xs ? 12 : 32, background: '#f0f2f5' }}>
-      <style>{invoiceStyles}</style>
+      <style>{estimateStyles}</style>
       
-      {/* Print/Download Controls */}
+      {/* Controls */}
       <div className="no-print">
         <Card style={{ marginBottom: 24, borderRadius: 12 }}>
           <Row justify="space-between" align="middle">
             <Col>
-              <Title level={4} style={{ margin: 0 }}>Invoice #{currentOrder.orderNumber}</Title>
-              <Text type="secondary">Clean Invoice Format</Text>
+              <Space>
+                <Button 
+                  icon={<ArrowLeftOutlined />} 
+                  onClick={() => navigate('/estimations')}
+                >
+                  Back to Estimates
+                </Button>
+                <Divider type="vertical" />
+                <div>
+                  <Title level={4} style={{ margin: 0 }}>
+                    Estimate {currentEstimate.estimateNumber}
+                  </Title>
+                  <Space>
+                    <Text type="secondary">Created: {moment(currentEstimate.createdAt?.toDate?.() || currentEstimate.createdAt).format('DD/MM/YYYY')}</Text>
+                    
+                    {isExpired ? (
+                      <Tag color="red">EXPIRED</Tag>
+                    ) : daysToExpiry <= 7 ? (
+                      <Tag color="orange">Expires in {daysToExpiry} days</Tag>
+                    ) : (
+                      <Tag color="green">Valid for {daysToExpiry} days</Tag>
+                    )}
+                    
+                    <Tag color={currentEstimate.businessType === 'wholesale' ? 'orange' : 'blue'}>
+                      {currentEstimate.businessType === 'wholesale' ? 'Wholesale' : 'Retail'}
+                    </Tag>
+                    
+                    <Tag color={currentEstimate.status === 'converted' ? 'purple' : 'green'}>
+                      {(currentEstimate.status || 'active').toUpperCase()}
+                    </Tag>
+                  </Space>
+                </div>
+              </Space>
             </Col>
             <Col>
               <Space>
-                {/* 🆕 ADD SHARE BUTTON */}
                 <Button 
                   icon={<ShareAltOutlined />} 
                   onClick={handleShare}
@@ -425,20 +383,40 @@ const Invoice = () => {
                   }}
                   size="large"
                 >
-                  Share Invoice
+                  Share Estimate
                 </Button>
+                
+                {currentEstimate.status === 'active' && !isExpired && (
+                  <Button 
+                    icon={<FileAddOutlined />} 
+                    onClick={handleConvertToInvoice}
+                    type="primary"
+                    style={{
+                      backgroundColor: '#1890ff',
+                      borderColor: '#1890ff'
+                    }}
+                    size="large"
+                  >
+                    Convert to Invoice
+                  </Button>
+                )}
+                
                 <Button 
                   icon={<PrinterOutlined />} 
                   onClick={handlePrint} 
                   size="large"
                 >
-                  Print Invoice
+                  Print
                 </Button>
                 <Button 
                   icon={<DownloadOutlined />} 
                   onClick={handleDownload} 
                   type="primary" 
                   size="large"
+                  style={{
+                    background: 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
+                    border: 'none'
+                  }}
                 >
                   Download PDF
                 </Button>
@@ -448,12 +426,12 @@ const Invoice = () => {
         </Card>
       </div>
 
-      {/* Invoice Content */}
+      {/* Estimate Content */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div ref={invoiceRef} className="invoice-container">
+        <div ref={estimateRef} className="estimate-container">
           
           {/* Header */}
-          <div className="invoice-header">
+          <div className="estimate-header">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
               <div className="logo-container">
                 <img 
@@ -483,9 +461,9 @@ const Invoice = () => {
             </div>
           </div>
 
-          {/* TAX INVOICE Title */}
-          <div className="invoice-title">
-            TAX INVOICE
+          {/* ESTIMATE Title */}
+          <div className="estimate-title">
+            ESTIMATE
           </div>
 
           {/* GSTIN */}
@@ -493,43 +471,39 @@ const Invoice = () => {
             GSTIN: {MAIN_STORE_INFO.gstin}
           </div>
 
-          {/* Invoice Details Section */}
-          <div className="invoice-info">
-            <div className="invoice-details">
-              <div><strong>P.O. No.</strong></div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(currentOrder.createdAt?.toDate?.() || currentOrder.createdAt).format('DD/MM/YYYY')}</div>
+          {/* Estimate Details Section */}
+          <div className="estimate-info">
+            <div className="estimate-details">
+              <div><strong>Estimate No.</strong> {currentEstimate.estimateNumber}</div>
+              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(currentEstimate.createdAt?.toDate?.() || currentEstimate.createdAt).format('DD/MM/YYYY')}</div>
             </div>
             <div style={{ flex: 1, borderRight: '1px solid #000', borderLeft: '1px solid #000', paddingLeft: '10px', paddingRight: '10px' }}>
-              <div><strong>DC No.</strong></div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong></div>
+              <div><strong>Valid Until:</strong></div>
+              <div style={{ marginTop: '15px' }}><strong>{moment(currentEstimate.expiryDate).format('DD/MM/YYYY')}</strong></div>
             </div>
             <div className="customer-details">
-              <div><strong>Invoice No.</strong> {currentOrder.orderNumber}</div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(currentOrder.createdAt?.toDate?.() || currentOrder.createdAt).format('DD/MM/YYYY')}</div>
-            </div>
-          </div>
-
-          {/* Database IDs for Reference */}
-          <div style={{ padding: '5px 10px', borderBottom: '1px solid #000', backgroundColor: '#f9f9f9', fontSize: '9px', color: '#666' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span><strong>Order ID:</strong> {currentOrder.id}</span>
-              <span><strong>Invoice ID:</strong> {currentOrder.invoiceId || currentOrder.id}</span>
-              <span><strong>System Ref:</strong> {currentOrder.orderNumber}</span>
+              <div><strong>Business Type:</strong> {currentEstimate.businessType === 'wholesale' ? 'Wholesale' : 'Retail'}</div>
+              <div style={{ marginTop: '15px' }}><strong>Branch:</strong> {currentEstimate.branchInfo?.name || 'Main Branch'}</div>
             </div>
           </div>
 
           {/* Customer Details */}
           <div className="customer-section">
-            <div><strong>M/s. {currentOrder.customer?.name || 'Walk-in Customer'}</strong></div>
-            {currentOrder.customer?.phone && (
-              <div style={{ marginTop: '5px' }}>Ph: {currentOrder.customer.phone}</div>
+            <div><strong>M/s. {currentEstimate.customer?.name || 'Walk-in Customer'}</strong></div>
+            {currentEstimate.customer?.phone && (
+              <div style={{ marginTop: '5px' }}>Ph: {currentEstimate.customer.phone}</div>
             )}
-            {currentOrder.customer?.email && (
-              <div style={{ marginTop: '5px' }}>Email: {currentOrder.customer.email}</div>
+            {currentEstimate.customer?.email && (
+              <div style={{ marginTop: '5px' }}>Email: {currentEstimate.customer.email}</div>
             )}
             <div style={{ marginTop: '10px' }}>
               <strong>GSTIN: ________________________________</strong>
             </div>
+          </div>
+
+          {/* Validity Alert */}
+          <div className="validity-alert">
+            This estimate is valid for 3 months from the date of issue • Expires: {moment(currentEstimate.expiryDate).format('DD/MM/YYYY')}
           </div>
 
           {/* Items Table */}
@@ -545,7 +519,7 @@ const Invoice = () => {
               </tr>
             </thead>
             <tbody>
-              {currentOrder.items.map((item, index) => (
+              {currentEstimate.items.map((item, index) => (
                 <tr key={index}>
                   <td className="text-center">{index + 1}</td>
                   <td className="text-center">-</td>
@@ -555,8 +529,8 @@ const Invoice = () => {
                   <td className="text-right">₹{(item.price * item.quantity).toFixed(2)}</td>
                 </tr>
               ))}
-              {/* Empty rows for padding */}
-              {Array.from({ length: Math.max(0, 10 - currentOrder.items.length) }).map((_, index) => (
+              {/* Empty rows to complete 8 rows */}
+              {Array.from({ length: Math.max(0, 8 - currentEstimate.items.length) }).map((_, index) => (
                 <tr key={`empty-${index}`} style={{ height: '30px' }}>
                   <td>&nbsp;</td>
                   <td>&nbsp;</td>
@@ -569,31 +543,28 @@ const Invoice = () => {
             </tbody>
           </table>
 
-          {/* Totals Section */}
+          {/* Totals Section with Notes */}
           <div className="totals-section">
-            <div className="amount-words">
-              <strong>Amount in Words:</strong>
-              <div style={{ marginTop: '10px', lineHeight: '1.4' }}>
-                {numberToWords(finalTotal)}
+            <div className="notes-section">
+              <strong>Notes & Terms:</strong>
+              <div style={{ marginTop: '10px', lineHeight: '1.4', minHeight: '60px' }}>
+                {currentEstimate.notes || 'No additional notes provided.'}
               </div>
-              {/* Advance payment info */}
-              {currentOrder.isAdvanceBilling && (
-                <div style={{ marginTop: '20px', fontSize: '11px', lineHeight: '1.3' }}>
-                  <div><strong>Payment Summary:</strong></div>
-                  <div>Total Amount: ₹{finalTotal.toFixed(2)}</div>
-                  <div style={{ color: '#52c41a' }}>Advance Paid: ₹{(currentOrder.advanceAmount || 0).toFixed(2)}</div>
-                  {currentOrder.remainingAmount > 0 && (
-                    <div style={{ color: '#fa541c' }}>
-                      <strong>Balance Due: ₹{currentOrder.remainingAmount.toFixed(2)}</strong>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div style={{ marginTop: '15px', fontSize: '10px', color: '#666' }}>
+                <div><strong>Terms & Conditions:</strong></div>
+                <div>• This estimate is valid for 3 months from issue date</div>
+                <div>• Prices may vary based on final specifications</div>
+                <div>• All pottery items are handcrafted and may have natural variations</div>
+                <div>• Final invoice will be generated upon order confirmation</div>
+              </div>
             </div>
             <div className="totals-column">
               <div>
-                <div style={{ fontSize: '14px', marginBottom: '5px' }}>TOTAL</div>
+                <div style={{ fontSize: '14px', marginBottom: '5px' }}>ESTIMATED TOTAL</div>
                 <div style={{ fontSize: '20px', color: '#8b4513' }}>₹{finalTotal.toFixed(2)}</div>
+                <div style={{ fontSize: '10px', marginTop: '8px', color: '#666' }}>
+                  ({currentEstimate.businessType === 'wholesale' ? 'Wholesale' : 'Retail'} Pricing)
+                </div>
               </div>
             </div>
           </div>
@@ -624,10 +595,10 @@ const Invoice = () => {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ marginBottom: '5px' }}>
-                <strong>USE ECO-FRIENDLY SAVE HEALTH & EARTH</strong>
+                <strong>HANDCRAFTED POTTERY • ECO-FRIENDLY • TRADITIONAL ART</strong>
               </div>
               <div style={{ fontSize: '10px' }}>
-                Visit: {MAIN_STORE_INFO.website}
+                Visit: {MAIN_STORE_INFO.website} • This is an estimate, not a tax invoice
               </div>
             </div>
           </div>
@@ -637,4 +608,4 @@ const Invoice = () => {
   );
 };
 
-export default Invoice;
+export default EstimateView;

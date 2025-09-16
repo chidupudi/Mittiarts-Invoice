@@ -1,4 +1,4 @@
-// src/services/firebaseService.js - Updated with Share Token Access
+// src/services/firebaseService.js - Updated with Estimation Support
 import {
   collection,
   doc,
@@ -21,6 +21,18 @@ class FirebaseService {
     // Rate limiting for public access
     this.publicAccessAttempts = new Map();
     this.maxAttemptsPerMinute = 10;
+
+    // Admin users who can access all data
+    this.adminEmails = [
+      'admin@mittiarts.com',
+      'mittiarts@gmail.com',
+      'niteeshklv20004@gmail.com'
+    ];
+  }
+
+  // Check if current user is admin
+  isAdmin() {
+    return auth.currentUser && this.adminEmails.includes(auth.currentUser.email);
   }
 
   // Rate limiting for public access
@@ -64,7 +76,385 @@ class FirebaseService {
     return plainObject;
   }
 
-  // 🆕 NEW: Public access method for orders by share token
+  // 🆕 NEW: Public access method for estimates by share token
+  async getEstimateByShareToken(shareToken, clientIp = 'unknown') {
+    try {
+      console.log('🔍 Public estimate access attempt for token:', shareToken?.slice(0, 10) + '...');
+      console.log('📍 Access from IP:', clientIp);
+
+      if (!shareToken) {
+        throw new Error('Invalid estimate link');
+      }
+
+      // Rate limiting for public access
+      this.checkRateLimit(clientIp);
+
+      // Query estimates by shareToken
+      const estimatesRef = collection(db, 'estimates');
+      const q = query(
+        estimatesRef, 
+        where('shareToken', '==', shareToken),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.warn('🚫 Estimate not found for token:', shareToken?.slice(0, 10) + '...');
+        throw new Error('Estimate not found or link may have expired');
+      }
+
+      let estimateData = null;
+      querySnapshot.forEach((doc) => {
+        const data = this.convertDocToPlainObject(doc.data());
+        estimateData = { id: doc.id, ...data };
+      });
+
+      if (!estimateData) {
+        throw new Error('Estimate not found');
+      }
+
+      // Check and update validity status
+      const createdAt = estimateData.createdAt ? new Date(estimateData.createdAt) : new Date();
+      const expiryDate = new Date(createdAt);
+      expiryDate.setMonth(expiryDate.getMonth() + 3); // 3 months validity
+
+      const now = new Date();
+      const isExpired = now > expiryDate;
+      const daysToExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+
+      // Add calculated fields
+      estimateData.isExpired = isExpired;
+      estimateData.expiryDate = expiryDate;
+      estimateData.daysToExpiry = Math.max(0, daysToExpiry);
+
+      // Update status if expired (but don't fail if update fails)
+      if (isExpired && estimateData.status === 'active') {
+        try {
+          const docRef = doc(db, 'estimates', estimateData.id);
+          await updateDoc(docRef, { 
+            status: 'expired',
+            expiredAt: Timestamp.now()
+          });
+          estimateData.status = 'expired';
+          console.log('📅 Estimate status updated to expired');
+        } catch (updateError) {
+          console.warn('Failed to update expired status:', updateError);
+        }
+      }
+
+      // Log access for security/analytics
+      try {
+        await this.logEstimateAccess(estimateData.id, shareToken, clientIp);
+      } catch (logError) {
+        console.warn('Failed to log estimate access:', logError);
+        // Don't fail the request if logging fails
+      }
+
+      // Enrich with customer data if available
+      if (estimateData.customerId) {
+        try {
+          const customer = await this.getCustomerForPublicAccess(estimateData.customerId);
+          estimateData.customer = customer;
+          console.log('👤 Customer data enriched for public access');
+        } catch (customerError) {
+          console.warn('Customer not found for estimate:', customerError);
+          // Don't fail if customer not found
+        }
+      }
+
+      // Remove sensitive data for public access
+      const publicEstimateData = this.sanitizeEstimateForPublic(estimateData);
+
+      console.log('✅ Public estimate access granted:', estimateData.id);
+      return publicEstimateData;
+
+    } catch (error) {
+      console.error('❌ Error fetching estimate by share token:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 Log estimate access for analytics and security
+  async logEstimateAccess(estimateId, shareToken, clientIp) {
+    try {
+      const accessLog = {
+        estimateId,
+        shareToken,
+        clientIp: clientIp || 'unknown',
+        accessedAt: Timestamp.now(),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        source: 'public_estimate_view'
+      };
+
+      await addDoc(collection(db, 'estimate_access_logs'), accessLog);
+      console.log('📊 Estimate access logged');
+    } catch (error) {
+      console.error('Failed to log estimate access:', error);
+      // Don't throw error - logging is optional
+    }
+  }
+
+  // 🆕 Get customer data for public estimate access (sanitized)
+  async getCustomerForPublicAccess(customerId) {
+    try {
+      const docRef = doc(db, 'customers', customerId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const customerData = this.convertDocToPlainObject(docSnap.data());
+        // Return only public fields
+        return {
+          name: customerData.name,
+          phone: customerData.phone
+        };
+      }
+      return null;
+    } catch (error) {
+      console.warn('Error getting customer for public access:', error);
+      return null;
+    }
+  }
+
+  // 🆕 Remove sensitive data from estimate for public access
+  sanitizeEstimateForPublic(estimateData) {
+    const sanitized = { ...estimateData };
+    
+    // Remove sensitive business data
+    delete sanitized.userId;
+    delete sanitized.internalNotes;
+    delete sanitized.costPrice;
+    delete sanitized.profit;
+    delete sanitized.margin;
+    delete sanitized.analytics;
+    
+    // Sanitize customer data (keep only name and phone)
+    if (sanitized.customer) {
+      sanitized.customer = {
+        name: sanitized.customer.name,
+        phone: sanitized.customer.phone
+      };
+    }
+
+    // Sanitize items (remove sensitive data)
+    if (sanitized.items) {
+      sanitized.items = sanitized.items.map(item => ({
+        product: {
+          id: item.product?.id,
+          name: item.product?.name,
+          category: item.product?.category
+        },
+        quantity: item.quantity,
+        price: item.price
+      }));
+    }
+
+    // Keep only essential branch info
+    if (sanitized.branchInfo) {
+      sanitized.branchInfo = {
+        name: sanitized.branchInfo.name,
+        address: sanitized.branchInfo.address
+      };
+    }
+
+    return sanitized;
+  }
+
+  // 🆕 Get estimate analytics (admin sees all, users see their own)
+  async getEstimateAnalytics(filters = {}) {
+    try {
+      if (!auth.currentUser) {
+        throw new Error('Authentication required');
+      }
+
+      const { startDate, endDate } = filters;
+
+      let q = collection(db, 'estimates');
+
+      // Admin can see all estimates, regular users only their own
+      if (!this.isAdmin()) {
+        q = query(q, where('userId', '==', auth.currentUser.uid));
+      }
+
+      if (startDate) {
+        q = query(q, where('createdAt', '>=', Timestamp.fromDate(new Date(startDate))));
+      }
+      if (endDate) {
+        q = query(q, where('createdAt', '<=', Timestamp.fromDate(new Date(endDate))));
+      }
+
+      q = query(q, orderBy('createdAt', 'desc'));
+
+      const querySnapshot = await getDocs(q);
+      const estimates = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = this.convertDocToPlainObject(doc.data());
+        estimates.push({ id: doc.id, ...data });
+      });
+      
+      // Calculate analytics
+      const analytics = {
+        total: estimates.length,
+        active: estimates.filter(e => e.status === 'active' && !this.isEstimateExpired(e)).length,
+        expired: estimates.filter(e => e.status === 'expired' || this.isEstimateExpired(e)).length,
+        converted: estimates.filter(e => e.status === 'converted').length,
+        cancelled: estimates.filter(e => e.status === 'cancelled').length,
+        totalValue: estimates.reduce((sum, e) => sum + (e.total || 0), 0),
+        averageValue: estimates.length > 0 ? estimates.reduce((sum, e) => sum + (e.total || 0), 0) / estimates.length : 0,
+        conversionRate: estimates.length > 0 ? (estimates.filter(e => e.status === 'converted').length / estimates.length) * 100 : 0,
+        businessTypeBreakdown: {
+          retail: estimates.filter(e => e.businessType === 'retail').length,
+          wholesale: estimates.filter(e => e.businessType === 'wholesale').length
+        }
+      };
+
+      return analytics;
+    } catch (error) {
+      console.error('Error calculating estimate analytics:', error);
+      throw error;
+    }
+  }
+
+  // 🆕 Helper method to check if estimate is expired
+  isEstimateExpired(estimate) {
+    const createdAt = estimate.createdAt ? new Date(estimate.createdAt) : new Date();
+    const expiryDate = new Date(createdAt);
+    expiryDate.setMonth(expiryDate.getMonth() + 3); // 3 months validity
+    return new Date() > expiryDate;
+  }
+
+  // 🆕 ADMIN: Get comprehensive business analytics
+  async getBusinessAnalytics() {
+    try {
+      if (!auth.currentUser) {
+        throw new Error('Authentication required');
+      }
+
+      // Get all collections
+      const [orders, estimates, customers, products, branches] = await Promise.all([
+        this.getAll('orders', {}),
+        this.getAll('estimates', {}),
+        this.getAll('customers', {}),
+        this.getAll('products', {}),
+        this.getAll('branches', {})
+      ]);
+
+      // Calculate comprehensive analytics
+      const analytics = {
+        overview: {
+          totalRevenue: orders.reduce((sum, order) => sum + (order.total || 0), 0),
+          totalOrders: orders.length,
+          totalCustomers: customers.length,
+          totalProducts: products.length,
+          totalEstimates: estimates.length,
+          activeBranches: branches.filter(b => b.status === 'active').length
+        },
+        revenue: {
+          thisMonth: this.getMonthlyRevenue(orders, 0),
+          lastMonth: this.getMonthlyRevenue(orders, 1),
+          growth: this.calculateGrowthRate(orders)
+        },
+        customers: {
+          new: customers.filter(c => this.isThisMonth(c.createdAt)).length,
+          returning: customers.filter(c => c.orderCount > 1).length,
+          topCustomers: this.getTopCustomers(customers, orders)
+        },
+        products: {
+          bestsellers: this.getBestsellingProducts(products, orders),
+          lowStock: products.filter(p => p.stock <= p.minStock).length
+        },
+        estimates: {
+          converted: estimates.filter(e => e.status === 'converted').length,
+          pending: estimates.filter(e => e.status === 'active').length,
+          conversionRate: estimates.length > 0 ?
+            (estimates.filter(e => e.status === 'converted').length / estimates.length * 100) : 0
+        },
+        branches: {
+          performance: this.getBranchPerformance(branches, orders),
+          revenue: branches.reduce((sum, b) => sum + (b.monthlyRevenue || 0), 0)
+        }
+      };
+
+      return analytics;
+    } catch (error) {
+      console.error('Error in getBusinessAnalytics:', error);
+      throw error;
+    }
+  }
+
+  // Helper methods for analytics
+  getMonthlyRevenue(orders, monthsAgo = 0) {
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() - monthsAgo);
+
+    return orders
+      .filter(order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate.getMonth() === targetDate.getMonth() &&
+               orderDate.getFullYear() === targetDate.getFullYear();
+      })
+      .reduce((sum, order) => sum + (order.total || 0), 0);
+  }
+
+  calculateGrowthRate(orders) {
+    const thisMonth = this.getMonthlyRevenue(orders, 0);
+    const lastMonth = this.getMonthlyRevenue(orders, 1);
+    return lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth * 100) : 0;
+  }
+
+  isThisMonth(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }
+
+  getTopCustomers(customers, orders) {
+    return customers
+      .map(customer => ({
+        ...customer,
+        totalSpent: orders
+          .filter(o => o.customerId === customer.id)
+          .reduce((sum, o) => sum + (o.total || 0), 0)
+      }))
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 5);
+  }
+
+  getBestsellingProducts(products, orders) {
+    const productSales = {};
+
+    orders.forEach(order => {
+      order.items?.forEach(item => {
+        const productId = item.productId || item.product?.id;
+        if (productId) {
+          productSales[productId] = (productSales[productId] || 0) + item.quantity;
+        }
+      });
+    });
+
+    return products
+      .map(product => ({
+        ...product,
+        totalSold: productSales[product.id] || 0
+      }))
+      .sort((a, b) => b.totalSold - a.totalSold)
+      .slice(0, 10);
+  }
+
+  getBranchPerformance(branches, orders) {
+    return branches.map(branch => ({
+      id: branch.id,
+      name: branch.name,
+      orders: orders.filter(o => o.branchInfo?.name === branch.name).length,
+      revenue: orders
+        .filter(o => o.branchInfo?.name === branch.name)
+        .reduce((sum, o) => sum + (o.total || 0), 0),
+      monthlyRevenue: branch.monthlyRevenue || 0
+    }));
+  }
+
+  // EXISTING: Public access method for orders by share token
   async getOrderByShareToken(shareToken, clientIp = 'unknown') {
     try {
       console.log('🔍 Public access attempt for token:', shareToken?.slice(0, 10) + '...');
@@ -117,7 +507,7 @@ class FirebaseService {
     }
   }
 
-  // 🔐 SECURE: Public access method for orders by bill token (keeping for SMS compatibility)
+  // EXISTING: Public access method for orders by bill token (keeping for SMS compatibility)
   async getOrderByBillToken(billToken, clientIp = 'unknown') {
     try {
       // Rate limiting
@@ -172,12 +562,12 @@ class FirebaseService {
     }
   }
 
-  // Validate bill token format
+  // EXISTING: Validate bill token format
   isValidBillTokenFormat(token) {
     return /^MITTI_[A-Z0-9_]+$/.test(token);
   }
 
-  // Check if bill token is expired (tokens expire after 90 days)
+  // EXISTING: Check if bill token is expired (tokens expire after 90 days)
   isBillTokenExpired(order) {
     if (!order.createdAt) return true;
     
@@ -191,7 +581,7 @@ class FirebaseService {
     return new Date() > expiryDate;
   }
 
-  // Remove sensitive data for public access
+  // EXISTING: Remove sensitive data for public access
   sanitizeOrderForPublic(orderData) {
     const sanitized = { ...orderData };
     
@@ -226,7 +616,7 @@ class FirebaseService {
     return sanitized;
   }
 
-  // 🔐 SECURE: Authenticated access - user can only see their own orders
+  // UPDATED: Authenticated access - user can only see their own documents
   async getById(collectionName, id) {
     try {
       const docRef = doc(db, collectionName, id);
@@ -237,6 +627,7 @@ class FirebaseService {
         const document = { id: docSnap.id, ...data };
         
         // 🔒 SECURITY CHECK: Ensure user can only access their own documents
+        // BUT allow access to documents without userId (legacy data) if user is authenticated
         if (auth.currentUser && document.userId && document.userId !== auth.currentUser.uid) {
           throw new Error('Access denied: You can only view your own records');
         }
@@ -251,14 +642,76 @@ class FirebaseService {
     }
   }
 
-  // 🔐 SECURE: Get all documents with user filtering
+  // 🆕 NEW: Safe method to get customer by ID (handles missing customers gracefully)
+  async getCustomerById(customerId) {
+    try {
+      if (!customerId) {
+        return null;
+      }
+
+      const docRef = doc(db, 'customers', customerId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = this.convertDocToPlainObject(docSnap.data());
+        const customer = { id: docSnap.id, ...data };
+        
+        // Security check for customers - allow if no userId or matches current user
+        if (auth.currentUser && customer.userId && customer.userId !== auth.currentUser.uid) {
+          console.warn(`Customer ${customerId} belongs to different user`);
+          return null;
+        }
+        
+        return customer;
+      } else {
+        console.warn(`Customer ${customerId} not found in database`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error getting customer ${customerId}:`, error);
+      return null; // Return null instead of throwing error
+    }
+  }
+
+  // 🆕 NEW: Batch get customers for orders (more efficient)
+  async getCustomersByIds(customerIds) {
+    try {
+      if (!customerIds || customerIds.length === 0) {
+        return {};
+      }
+
+      // Remove duplicates
+      const uniqueIds = [...new Set(customerIds.filter(id => id))];
+      const customers = {};
+
+      // Get all customers in parallel
+      const customerPromises = uniqueIds.map(async (customerId) => {
+        const customer = await this.getCustomerById(customerId);
+        if (customer) {
+          customers[customerId] = customer;
+        }
+        return customer;
+      });
+
+      await Promise.all(customerPromises);
+      return customers;
+    } catch (error) {
+      console.error('Error batch getting customers:', error);
+      return {};
+    }
+  }
+
+  // UPDATED: Get all documents with user filtering (admin can see all)
   async getAll(collectionName, options = {}) {
     try {
       let q = collection(db, collectionName);
 
-      // 🔒 SECURITY: Always filter by current user for authenticated requests
+      // 🔒 SECURITY: Filter by user unless admin
       if (auth.currentUser) {
-        q = query(q, where('userId', '==', auth.currentUser.uid));
+        // Admin users can see all data, regular users only see their own
+        if (!this.isAdmin()) {
+          q = query(q, where('userId', '==', auth.currentUser.uid));
+        }
       } else {
         // If no user is authenticated, return empty array
         return [];
@@ -301,7 +754,7 @@ class FirebaseService {
     }
   }
 
-  // 🔐 SECURE: Create with user ID
+  // EXISTING: Create with user ID
   async create(collectionName, data) {
     try {
       if (!auth.currentUser) {
@@ -322,7 +775,7 @@ class FirebaseService {
     }
   }
 
-  // 🔐 SECURE: Update with user verification
+  // EXISTING: Update with user verification
   async update(collectionName, id, data) {
     try {
       if (!auth.currentUser) {
@@ -348,7 +801,7 @@ class FirebaseService {
     }
   }
 
-  // 🔐 SECURE: Delete with user verification
+  // EXISTING: Delete with user verification
   async delete(collectionName, id) {
     try {
       if (!auth.currentUser) {
@@ -369,14 +822,14 @@ class FirebaseService {
     }
   }
 
-  // Helper to get nested field values
+  // EXISTING: Helper to get nested field values
   getNestedFieldValue(obj, fieldPath) {
     return fieldPath.split('.').reduce((current, field) => {
       return current && current[field] !== undefined ? current[field] : undefined;
     }, obj);
   }
 
-  // Apply filters on client side
+  // EXISTING: Apply filters on client side
   applyClientSideFilters(docs, options) {
     if (!options.where) return docs;
 
@@ -407,7 +860,7 @@ class FirebaseService {
     });
   }
 
-  // 🔐 SECURE: Real-time listener with user filtering
+  // EXISTING: Real-time listener with user filtering
   onSnapshot(collectionName, callback, options = {}) {
     try {
       if (!auth.currentUser) {

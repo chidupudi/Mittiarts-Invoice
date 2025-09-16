@@ -1,5 +1,5 @@
-// src/components/dashboard/DashboardLayout.js - Updated with Advance Payments
-import React, { useState, useEffect } from 'react';
+// src/components/dashboard/DashboardLayout.js - Updated with Estimations Menu
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -30,6 +30,8 @@ import {
   CloseOutlined,
   HomeOutlined,
   PayCircleOutlined,
+  // 🆕 NEW ICON FOR ESTIMATIONS
+  CalculatorOutlined,
 } from '@ant-design/icons';
 
 import { logoutUser } from '../../features/auth/authSlice';
@@ -38,11 +40,14 @@ const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 const { useBreakpoint } = Grid;
 
+// 🆕 UPDATED MENU ITEMS WITH ESTIMATIONS
 const menuItems = [
   { key: 'dashboard', path: '/', label: 'Dashboard', icon: <DashboardOutlined />, color: '#1976d2' },
   { key: 'products', path: '/products', label: 'Products', icon: <AppstoreOutlined />, color: '#9c27b0' },
   { key: 'customers', path: '/customers', label: 'Customers', icon: <UserOutlined />, color: '#2e7d32' },
   { key: 'billing', path: '/billing', label: 'Billing', icon: <ShoppingCartOutlined />, color: '#ed6c02' },
+  // 🆕 NEW ESTIMATIONS MENU ITEM
+  { key: 'estimations', path: '/estimations', label: 'Estimations', icon: <CalculatorOutlined />, color: '#1890ff' },
   { key: 'orders', path: '/orders', label: 'Orders', icon: <FileTextOutlined />, color: '#0288d1' },
   { key: 'invoices', path: '/invoices', label: 'Invoices', icon: <FilePdfOutlined />, color: '#7b1fa2' },
   { key: 'advance-payments', path: '/advance-payments', label: 'Advance Payments', icon: <PayCircleOutlined />, color: '#fa8c16' },
@@ -78,17 +83,20 @@ const DashboardLayout = ({ children }) => {
   console.log('Current location:', location.pathname);
   console.log('Is Mobile:', isMobile);
 
+  // 🆕 UPDATED SELECTED KEY LOGIC TO INCLUDE ESTIMATIONS
   const selectedKey = (() => {
     for (const item of menuItems) {
       if (location.pathname === item.path) return item.key;
       if (item.key === 'invoices' && location.pathname.startsWith('/invoices')) return 'invoices';
       if (item.key === 'storefront' && location.pathname.startsWith('/storefront')) return 'storefront';
       if (item.key === 'advance-payments' && location.pathname.startsWith('/advance-payments')) return 'advance-payments';
+      // 🆕 ADD ESTIMATIONS PATH MATCHING
+      if (item.key === 'estimations' && location.pathname.startsWith('/estimations')) return 'estimations';
     }
     return 'dashboard';
   })();
 
-  const onMenuClick = ({ key }) => {
+  const onMenuClick = useCallback(({ key }) => {
     console.log('Menu clicked:', key);
     const item = menuItems.find(i => i.key === key);
     if (item) {
@@ -100,9 +108,9 @@ const DashboardLayout = ({ children }) => {
         setMobileDrawerOpen(false);
       }
     }
-  };
+  }, [navigate, isMobile]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     console.log('Logging out...');
     try {
       await dispatch(logoutUser());
@@ -110,9 +118,9 @@ const DashboardLayout = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
+  }, [dispatch, navigate]);
 
-  const profileItems = [
+  const profileItems = useMemo(() => [
     {
       key: 'profile',
       icon: <UserOutlined />,
@@ -132,7 +140,7 @@ const DashboardLayout = ({ children }) => {
       label: 'Logout',
       onClick: handleLogout
     }
-  ];
+  ], [navigate, handleLogout]);
 
   const notificationItems = [
     {
@@ -142,8 +150,8 @@ const DashboardLayout = ({ children }) => {
     }
   ];
 
-  // Render sidebar content
-  const renderSidebarContent = () => (
+  // Render sidebar content with memoization
+  const renderSidebarContent = useMemo(() => (
     <div style={{ 
       height: '100%', 
       display: 'flex', 
@@ -268,7 +276,7 @@ const DashboardLayout = ({ children }) => {
         )}
       </div>
     </div>
-  );
+  ), [collapsed, isMobile, user, selectedKey, onMenuClick]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -290,7 +298,7 @@ const DashboardLayout = ({ children }) => {
           }}
           theme="light"
         >
-          {renderSidebarContent()}
+          {renderSidebarContent}
         </Sider>
       )}
 
@@ -307,7 +315,7 @@ const DashboardLayout = ({ children }) => {
           headerStyle={{ display: 'none' }}
           closeIcon={<CloseOutlined style={{ color: 'white' }} />}
         >
-          {renderSidebarContent()}
+          {renderSidebarContent}
         </Drawer>
       )}
 
@@ -316,7 +324,7 @@ const DashboardLayout = ({ children }) => {
         transition: 'margin-left 0.2s'
       }}>
         {/* Header */}
-        <Header style={{
+        <Header className="hardware-accelerated" style={{
           padding: '0 16px',
           background: '#fff',
           display: 'flex',
@@ -407,12 +415,13 @@ const DashboardLayout = ({ children }) => {
         </Header>
 
         {/* Content */}
-        <Content style={{ 
+        <Content className="hardware-accelerated" style={{ 
           margin: isMobile ? '8px' : '16px',
           padding: isMobile ? '12px' : '24px',
           minHeight: 'calc(100vh - 64px)',
           background: '#f5f5f5',
-          borderRadius: isMobile ? '8px' : '12px'
+          borderRadius: isMobile ? '8px' : '12px',
+          overflow: 'auto'
         }}>
           {children}
         </Content>
@@ -421,4 +430,4 @@ const DashboardLayout = ({ children }) => {
   );
 };
 
-export default DashboardLayout;
+export default memo(DashboardLayout);

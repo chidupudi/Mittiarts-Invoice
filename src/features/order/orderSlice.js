@@ -106,25 +106,15 @@ export const fetchOrders = createAsyncThunk(
         });
       }
 
-      // Enrich orders with customer data
+      // 🔧 IMPROVED: Enrich orders with customer data using safer method
       const customerIds = [...new Set(orders.filter(o => o.customerId).map(o => o.customerId))];
-      const customers = {};
-      
-      if (customerIds.length > 0) {
-        for (const customerId of customerIds) {
-          try {
-            const customer = await firebaseService.getById('customers', customerId);
-            customers[customerId] = customer;
-          } catch (error) {
-            console.warn(`Customer ${customerId} not found:`, error);
-          }
-        }
-      }
+      const customers = await firebaseService.getCustomersByIds(customerIds);
 
       // Enrich orders with branch info and calculations
       orders = orders.map(order => {
         const enrichedOrder = {
           ...order,
+          // Use the safely fetched customer data
           customer: order.customerId ? customers[order.customerId] : null,
           branchInfo: order.branchInfo || DEFAULT_BRANCH_INFO
         };
@@ -483,13 +473,18 @@ export const getOrder = createAsyncThunk(
     try {
       const order = await firebaseService.getById('orders', id);
       
-      // Enrich with customer data
+      // 🔧 IMPROVED: Enrich with customer data using safer method
       if (order.customerId) {
-        try {
-          const customer = await firebaseService.getById('customers', order.customerId);
+        const customer = await firebaseService.getCustomerById(order.customerId);
+        if (customer) {
           order.customer = customer;
-        } catch (error) {
-          console.warn(`Customer ${order.customerId} not found:`, error);
+        } else {
+          console.warn(`Customer ${order.customerId} not found for order ${id}`);
+          // Set a placeholder customer instead of failing
+          order.customer = {
+            name: 'Customer Not Found',
+            phone: 'N/A'
+          };
         }
       }
 
