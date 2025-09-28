@@ -23,15 +23,34 @@ const OrderSummary = ({
   const totals = calculateTotals(cart, safeBusinessType);
 
   return (
-    <Card 
+    <Card
       title={
         <Space>
-          <CalculatorOutlined />
-          <span>Order Summary - {safeBusinessType.charAt(0).toUpperCase() + safeBusinessType.slice(1)}</span>
+          <span style={{
+            background: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#d9d9d9',
+            color: (selectedCustomer && cart.length > 0) ? 'white' : '#8c8c8c',
+            borderRadius: '50%',
+            width: '24px',
+            height: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '12px'
+          }}>
+            5
+          </span>
+          <span style={{ color: (selectedCustomer && cart.length > 0) ? 'inherit' : '#8c8c8c' }}>
+            STEP 5: Final Review & Generate Invoice
+          </span>
         </Space>
       }
       size="small"
-      style={{ flex: 1 }}
+      style={{
+        flex: 1,
+        borderColor: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#d9d9d9',
+        borderWidth: '2px',
+        opacity: (selectedCustomer && cart.length > 0) ? 1 : 0.6
+      }}
       bodyStyle={{ padding: '12px' }}
     >
       <div style={{ marginBottom: 16 }}>
@@ -150,9 +169,34 @@ const OrderSummary = ({
         block
         disabled={disabled}
         icon={<PrinterOutlined />}
-        style={{ height: 48, fontSize: 16 }}
+        style={{
+          height: 56,
+          fontSize: 16,
+          fontWeight: '600',
+          borderRadius: '8px',
+          background: disabled
+            ? '#d9d9d9'
+            : 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
+          border: 'none',
+          boxShadow: disabled
+            ? 'none'
+            : '0 6px 20px rgba(82, 196, 26, 0.3)',
+          transition: 'all 0.3s ease'
+        }}
+        onMouseEnter={(e) => {
+          if (!disabled) {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 8px 28px rgba(82, 196, 26, 0.4)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!disabled) {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(82, 196, 26, 0.3)';
+          }
+        }}
       >
-        {isAdvanceBilling ? 'Generate Advance Invoice' : 'Generate Invoice'}
+        {isAdvanceBilling ? '🧾 Generate Advance Invoice' : '🧾 Generate Invoice'}
       </Button>
     </Card>
   );
