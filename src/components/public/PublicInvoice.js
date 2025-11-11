@@ -281,19 +281,19 @@ const PublicInvoice = () => {
       return result;
     };
     
-    const integerPart = Math.floor(amount);
+    let integerPart = Math.floor(amount);
     let words = "";
-    
+
     if (integerPart > 99999) {
       words += convertHundreds(Math.floor(integerPart / 100000)) + "Lakh ";
       integerPart %= 100000;
     }
-    
+
     if (integerPart > 999) {
       words += convertHundreds(Math.floor(integerPart / 1000)) + "Thousand ";
       integerPart %= 1000;
     }
-    
+
     words += convertHundreds(integerPart);
     words += "Rupees Only";
     

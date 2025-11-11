@@ -94,16 +94,19 @@ export default async function handler(req, res) {
 
     // Parse response
     let pertinaxData;
+    const responseText = await pertinaxResponse.text();
+    console.log('📊 Pertinax Raw Response:', responseText);
+
     try {
-      pertinaxData = await pertinaxResponse.json();
-      console.log('📊 Pertinax Response Data:', pertinaxData);
+      pertinaxData = JSON.parse(responseText);
+      console.log('📊 Pertinax Parsed Data:', pertinaxData);
     } catch (parseError) {
-      const responseText = await pertinaxResponse.text();
-      console.error('❌ Failed to parse Pertinax response:', responseText);
+      console.error('❌ Failed to parse Pertinax response:', parseError.message);
       return res.status(500).json({
         success: false,
-        error: 'Invalid response from SMS gateway',
-        rawResponse: responseText
+        error: 'Invalid JSON response from SMS gateway',
+        rawResponse: responseText,
+        httpStatus: pertinaxResponse.status
       });
     }
 
