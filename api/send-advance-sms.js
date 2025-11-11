@@ -1,4 +1,4 @@
-// api/send-advance-sms.js - Zoko WhatsApp Implementation for Advance Payment Messages
+// api/send-advance-sms.js - Pertinax SMS API for Advance Payment with DLT Template
 export default async function handler(req, res) {
   // Handle CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,269 +10,204 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed. Use POST method.',
-      smsType: 'bill',
-      provider: 'Zoko WhatsApp'
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use POST method.'
     });
   }
 
   try {
-    console.log('📱 Zoko WhatsApp Invoice Message Request:', {
+    console.log('📱 Pertinax Advance Payment SMS Request:', {
       bodyKeys: Object.keys(req.body || {}),
       timestamp: new Date().toISOString()
     });
 
-    const { 
-      phoneNumber, 
-      customerName, 
-      orderNumber, 
-      billToken,
-      totalAmount 
+    const {
+      phoneNumber,
+      customerName,
+      advanceAmount,
+      invoiceLink,
+      smsText
     } = req.body;
 
     // Validate required fields
-    if (!phoneNumber || !customerName || !orderNumber) {
+    if (!phoneNumber || !customerName || !advanceAmount) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: phoneNumber, customerName, orderNumber',
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp'
+        error: 'Missing required fields: phoneNumber, customerName, advanceAmount'
       });
     }
 
     // Clean and validate phone number
     const cleanNumber = phoneNumber.toString().replace(/^\+91/, '').replace(/\D/g, '');
-    
+
     if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.',
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp'
+        error: 'Invalid Indian mobile number. Must be 10 digits starting with 6, 7, 8, or 9.'
       });
     }
 
-    // Format for WhatsApp (with country code)
-    const whatsappNumber = `91${cleanNumber}`;
+    // Pertinax API Configuration
+    const PERTINAX_API_KEY = '2ogC0TMtJkioQY1eLYAt4w';
+    const PERTINAX_SENDER_ID = 'MTARTS';
+    const DLT_TEMPLATE_ID = '1207176268898361869';
+    const PERTINAX_API_URL = 'http://pertinaxsolution.com/api/mt/SendSMS';
 
-    // Generate invoice link
-    let origin = req.headers.origin || req.headers.referer;
-    if (!origin) {
-      const protocol = req.headers['x-forwarded-proto'] || 'https';
-      const host = req.headers.host || req.headers['x-forwarded-host'] || 'invoice.mittiarts.com';
-      origin = `${protocol}://${host}`;
-    }
-    origin = origin.replace(/\/$/, '');
-    
-    const billLink = billToken && billToken !== 'none' 
-      ? `${origin}/public/invoice/${billToken}` 
-      : `${origin}`;
-
-    // Create WhatsApp message for pottery business
-    const message = `🏺 *Mitti Arts - Invoice Generated*
-
-Dear ${customerName.trim()},
-
-Thank you for choosing our handcrafted pottery! 
-
-*Order Details:*
-📋 Order Number: ${orderNumber.trim()}
-💰 Amount: ₹${(totalAmount || 0).toFixed(2)}
-
-*View & Download Your Invoice:*
-${billLink}
-
-Your beautiful pottery pieces are ready! 🎨
-
-*Payment Options:*
-• Cash at store
-• UPI/Card payment
-• Bank transfer
-
-*Contact & Location:*
-📞 9441550927 / 7382150250
-🏪 Opp. Romoji Film City, Hyderabad
-📧 info@mittiarts.com
-
-*Mitti Arts Team*
-_Handcrafted with Love 🎨_
-
-*Follow us for more pottery creations!*`;
-
-    console.log('📱 Sending invoice WhatsApp message to:', `${cleanNumber.slice(0, 5)}*****`);
-    console.log('📝 Message length:', message.length, 'characters');
-    console.log('💰 Amount:', totalAmount);
-
-    // Validate message length for WhatsApp
-    if (message.length > 4096) {
-      return res.status(400).json({
-        success: false,
-        error: 'Message too long. WhatsApp limit is 4096 characters.',
-        messageLength: message.length,
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp'
-      });
+    // Prepare SMS text (use provided text or build from template)
+    let finalSmsText;
+    if (smsText) {
+      finalSmsText = smsText;
+    } else {
+      // Build SMS text from template with variables replaced
+      finalSmsText = `Dear ${customerName.trim()}, advance payment of Rs.${advanceAmount} received. View invoice: ${invoiceLink || 'N/A'} Thank you! - Mitti Arts`;
     }
 
-    // Zoko WhatsApp API Configuration
-    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
-    const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
+    console.log('📝 SMS Text Preview:', finalSmsText.substring(0, 80) + '...');
 
-    // Prepare WhatsApp message payload for Zoko
-    const payload = {
-      channel: 'whatsapp',
-      recipient: whatsappNumber,
-      type: 'text',
-      message: {
-        text: message
-      }
-    };
+    // Build Pertinax API URL with query parameters
+    const apiUrl = new URL(PERTINAX_API_URL);
+    apiUrl.searchParams.append('APIKey', PERTINAX_API_KEY);
+    apiUrl.searchParams.append('senderid', PERTINAX_SENDER_ID);
+    apiUrl.searchParams.append('channel', 'Trans'); // Transactional SMS
+    apiUrl.searchParams.append('DCS', '0'); // Normal message
+    apiUrl.searchParams.append('flashsms', '0'); // Not flash SMS
+    apiUrl.searchParams.append('number', `91${cleanNumber}`); // With country code
+    apiUrl.searchParams.append('text', finalSmsText); // Complete SMS text
+    apiUrl.searchParams.append('DLTTemplateId', DLT_TEMPLATE_ID); // DLT Template ID
 
-    console.log('📡 Calling Zoko WhatsApp API for invoice...');
+    console.log('📡 Calling Pertinax SMS API...');
+    console.log('🔧 API URL:', PERTINAX_API_URL);
+    console.log('📱 Recipient:', `91${cleanNumber}`);
+    console.log('📋 Template ID:', DLT_TEMPLATE_ID);
+    console.log('🏷️ Sender ID:', PERTINAX_SENDER_ID);
 
-    // Send WhatsApp message via Zoko API with SSL handling
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
-
-    const response = await fetch(ZOKO_API_URL, {
-      method: 'POST',
+    // Call Pertinax API
+    const pertinaxResponse = await fetch(apiUrl.toString(), {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${ZOKO_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': 'Mitti-Arts-POS/1.0'
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-      // Handle SSL issues
-      agent: false
+        'Accept': 'application/json'
+      }
     });
 
-    clearTimeout(timeoutId);
+    console.log('📊 Pertinax Response Status:', pertinaxResponse.status);
 
-    console.log('📊 Zoko Response Status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Zoko API Error Response:', errorText);
-      throw new Error(`Zoko WhatsApp API returned status ${response.status}: ${errorText}`);
+    // Parse response
+    let pertinaxData;
+    try {
+      pertinaxData = await pertinaxResponse.json();
+      console.log('📊 Pertinax Response Data:', pertinaxData);
+    } catch (parseError) {
+      const responseText = await pertinaxResponse.text();
+      console.error('❌ Failed to parse Pertinax response:', responseText);
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid response from SMS gateway',
+        rawResponse: responseText
+      });
     }
 
-    const data = await response.json();
-    console.log('📊 Zoko Response Data:', data);
+    // Check for success
+    // Pertinax success response: {"ErrorCode":"000","ErrorMessage":"Done","JobId":"20047","MessageData":[...]}
+    const isSuccess = pertinaxData.ErrorCode === '000' || pertinaxData.ErrorCode === 0;
 
-    // Handle successful Zoko response
-    if (data.success || data.id || data.message_id) {
-      console.log('✅ Invoice WhatsApp message sent successfully via Zoko');
-      
+    if (isSuccess) {
+      console.log('✅ SUCCESS with Pertinax SMS API');
+
+      // Extract message ID from response
+      const messageId = pertinaxData.MessageData && pertinaxData.MessageData.length > 0
+        ? pertinaxData.MessageData[0].MessageId
+        : null;
+
       return res.status(200).json({
         success: true,
-        messageId: data.id || data.message_id || data.request_id,
-        message: 'Invoice WhatsApp message sent successfully',
-        smsType: 'bill',
-        billToken: billToken || null,
-        billLink: billLink,
-        provider: 'Zoko WhatsApp',
-        channel: 'WhatsApp',
+        messageId: messageId,
+        jobId: pertinaxData.JobId,
+        message: 'Advance payment SMS sent successfully via Pertinax',
+        provider: 'Pertinax SMS',
+        channel: 'SMS',
         sentAt: new Date().toISOString(),
         phoneNumber: `+91${cleanNumber}`,
-        whatsappNumber: whatsappNumber,
+        smsText: finalSmsText,
         cost: 'Per message pricing',
-        
-        // Invoice specific data
-        invoiceDetails: {
-          orderNumber: orderNumber.trim(),
-          totalAmount: totalAmount || 0,
+
+        // Template specific data
+        templateInfo: {
+          templateId: DLT_TEMPLATE_ID,
+          templateName: 'advance--payments',
+          senderId: PERTINAX_SENDER_ID,
           customerName: customerName.trim(),
-          invoiceGenerated: !!billToken
+          advanceAmount: advanceAmount,
+          invoiceLink: invoiceLink || 'N/A'
         },
-        
-        // WhatsApp specific data
-        whatsappData: {
-          messageId: data.id || data.message_id,
-          status: data.status || 'sent',
-          recipient: whatsappNumber,
-          messageType: 'text',
-          characters: message.length
+
+        // Pertinax response
+        pertinaxResponse: {
+          errorCode: pertinaxData.ErrorCode,
+          errorMessage: pertinaxData.ErrorMessage,
+          jobId: pertinaxData.JobId,
+          messageId: messageId
         }
       });
     } else {
-      // Zoko returned error
-      let errorMsg = 'Unknown Zoko WhatsApp API error';
-      
-      if (data.error) {
-        errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-      } else if (data.message) {
-        errorMsg = data.message;
-      } else if (data.errors) {
-        errorMsg = Array.isArray(data.errors) ? data.errors.join(', ') : JSON.stringify(data.errors);
-      }
-      
-      console.error('❌ Zoko WhatsApp Invoice Error:', errorMsg);
-      
-      return res.status(422).json({
+      // SMS sending failed
+      console.log('❌ Pertinax SMS API failed:', pertinaxData.ErrorMessage);
+
+      return res.status(400).json({
         success: false,
-        error: `Zoko WhatsApp API Error: ${errorMsg}`,
-        smsType: 'bill',
-        provider: 'Zoko WhatsApp',
-        channel: 'WhatsApp',
-        attemptedAt: new Date().toISOString(),
-        phoneNumber: `+91${cleanNumber}`,
-        whatsappNumber: whatsappNumber,
-        zokoResponse: data,
-        
-        invoiceContext: {
-          orderNumber: orderNumber.trim(),
-          totalAmount: totalAmount || 0,
-          billToken: billToken || null
+        error: pertinaxData.ErrorMessage || 'Failed to send SMS',
+        errorCode: pertinaxData.ErrorCode,
+        provider: 'Pertinax SMS',
+        timestamp: new Date().toISOString(),
+
+        troubleshooting: {
+          possibleIssues: [
+            'Template not approved or incorrect template ID',
+            'Sender ID (MTARTS) not registered',
+            'API Key invalid or expired',
+            'Phone number format incorrect',
+            'SMS text does not match DLT template exactly',
+            'Insufficient balance in Pertinax account'
+          ],
+          recommendations: [
+            'Verify DLT template ID: 1207176268898361869',
+            'Check if sender ID MTARTS is approved',
+            'Verify API key: 2ogC0TMt...',
+            'Ensure SMS text matches template exactly',
+            'Check Pertinax account balance'
+          ]
+        },
+
+        requestDetails: {
+          phoneNumber: `+91${cleanNumber}`,
+          senderId: PERTINAX_SENDER_ID,
+          templateId: DLT_TEMPLATE_ID,
+          smsTextLength: finalSmsText.length
         }
       });
     }
 
   } catch (error) {
-    console.error('❌ Invoice WhatsApp Handler Error:', error);
-    
-    // Determine error type and appropriate response
-    let errorMessage = 'Failed to send invoice WhatsApp message';
-    let statusCode = 500;
-    let errorCode = 'UNKNOWN';
-    
-    if (error.message?.includes('fetch')) {
-      errorMessage = 'Failed to connect to Zoko WhatsApp API. Please check internet connection.';
-      statusCode = 503;
-      errorCode = 'NETWORK_ERROR';
-    } else if (error.message?.includes('timeout')) {
-      errorMessage = 'WhatsApp message request timed out. Please try again.';
-      statusCode = 504;
-      errorCode = 'TIMEOUT';
-    } else if (error.message?.includes('401') || error.message?.includes('403')) {
-      errorMessage = 'Zoko WhatsApp API authentication failed. Please check API key.';
-      statusCode = 401;
-      errorCode = 'AUTH_ERROR';
-    } else if (error.message?.includes('429')) {
-      errorMessage = 'Rate limit exceeded. Please try again later.';
-      statusCode = 429;
-      errorCode = 'RATE_LIMIT';
-    } else if (error.message) {
-      errorMessage = error.message;
-      errorCode = 'API_ERROR';
-    }
-    
-    return res.status(statusCode).json({
+    console.error('❌ Handler error:', error);
+
+    return res.status(500).json({
       success: false,
-      error: errorMessage,
-      errorCode: errorCode,
-      smsType: 'bill',
-      provider: 'Zoko WhatsApp',
-      channel: 'WhatsApp',
-      attemptedAt: new Date().toISOString(),
-      
-      invoiceContext: {
-        orderNumber: req.body.orderNumber,
-        totalAmount: req.body.totalAmount,
-        billToken: req.body.billToken
+      error: error.message,
+      timestamp: new Date().toISOString(),
+      troubleshooting: {
+        errorType: error.name,
+        possibleCauses: [
+          'Network connection issue with Pertinax API',
+          'API endpoint unreachable',
+          'Timeout during API call',
+          'Invalid request format'
+        ],
+        recommendations: [
+          'Check internet connectivity',
+          'Verify Pertinax API is online',
+          'Check API endpoint: http://pertinaxsolution.com/api/mt/SendSMS',
+          'Contact Pertinax support if issue persists'
+        ]
       }
     });
   }

@@ -1,4 +1,4 @@
-// api/status.js - Zoko WhatsApp API Health Check and Status Monitor for Mitti Arts
+// api/status.js - Pertinax SMS API Health Check and Status Monitor for Mitti Arts
 export default async function handler(req, res) {
   // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,8 +13,8 @@ export default async function handler(req, res) {
 
   // Only allow GET method for status checks
   if (req.method !== 'GET') {
-    return res.status(405).json({ 
-      success: false, 
+    return res.status(405).json({
+      success: false,
       error: 'Method not allowed. Use GET.',
       allowedMethods: ['GET'],
       timestamp: new Date().toISOString()
@@ -24,69 +24,104 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    console.log('🔍 Zoko WhatsApp API Status Check Requested:', {
+    console.log('🔍 Pertinax SMS API Status Check Requested:', {
       method: req.method,
       timestamp: new Date().toISOString(),
       userAgent: req.headers['user-agent'] || 'Unknown'
     });
 
-    // Zoko WhatsApp API Configuration
-    const ZOKO_API_KEY = '6c906326-4e7f-4a1a-a61e-9241bec269d4';
-    const ZOKO_API_URL = 'https://api.zoko.io/v2/message/send';
+    // Pertinax SMS API Configuration
+    const PERTINAX_API_KEY = '2ogC0TMtJkioQY1eLYAt4w';
+    const PERTINAX_API_URL = 'http://pertinaxsolution.com/api/mt/SendSMS';
+    const PERTINAX_SENDER_ID = 'MTARTS';
 
     // Basic health check data
     const healthCheck = {
-      service: 'Mitti Arts WhatsApp Messaging (Powered by Zoko)',
+      service: 'Mitti Arts SMS Messaging (Powered by Pertinax)',
       status: 'operational',
       timestamp: new Date().toISOString(),
       uptime: process.uptime ? `${Math.floor(process.uptime())} seconds` : 'unknown',
-      version: '2.0.0',
+      version: '3.0.0',
       environment: process.env.NODE_ENV || 'production',
-      provider: 'Zoko WhatsApp API',
+      provider: 'Pertinax SMS Gateway',
       region: 'India',
       businessType: 'Pottery & Handicrafts',
-      channel: 'WhatsApp Business'
+      channel: 'SMS (DLT Compliant)'
     };
 
     // API Configuration Status
     const configuration = {
-      zokoConfigured: !!ZOKO_API_KEY,
-      apiKey: ZOKO_API_KEY ? 
-        `${ZOKO_API_KEY.substring(0, 8)}...${ZOKO_API_KEY.substring(ZOKO_API_KEY.length - 4)}` : 
+      pertinaxConfigured: !!PERTINAX_API_KEY,
+      apiKey: PERTINAX_API_KEY ?
+        `${PERTINAX_API_KEY.substring(0, 8)}...${PERTINAX_API_KEY.substring(PERTINAX_API_KEY.length - 4)}` :
         'Not configured',
-      apiUrl: ZOKO_API_URL,
-      channel: 'WhatsApp Business',
-      supportedCountries: ['India', 'Global'],
-      phoneNumberFormat: 'International format (91XXXXXXXXXX for India)',
-      
-      // Available WhatsApp endpoints
+      apiUrl: PERTINAX_API_URL,
+      senderId: PERTINAX_SENDER_ID,
+      channel: 'Trans (Transactional)',
+      dltCompliant: true,
+      supportedCountries: ['India'],
+      phoneNumberFormat: 'Indian mobile numbers (91XXXXXXXXXX)',
+
+      // DLT Templates
+      dltTemplates: {
+        registered: [
+          {
+            name: 'advance--payments',
+            id: '1207176268898361869',
+            type: 'Service Implicit',
+            category: 'Consumer goods and automobiles',
+            status: 'approved',
+            endpoint: '/api/send-advance-sms'
+          }
+        ],
+        pending: [
+          {
+            name: 'invoice_full_payment',
+            id: 'pending',
+            type: 'Service Implicit',
+            status: 'not_registered'
+          },
+          {
+            name: 'invoice_payment_complete',
+            id: 'pending',
+            type: 'Service Implicit',
+            status: 'not_registered'
+          }
+        ]
+      },
+
+      // Available SMS endpoints
       endpoints: {
-        'send-sms': {
-          path: '/api/send-sms',
-          method: 'POST',
-          description: 'Send regular invoice/bill WhatsApp messages via Zoko',
-          status: 'active',
-          messageType: 'text'
-        },
         'send-advance-sms': {
-          path: '/api/send-advance-sms', 
+          path: '/api/send-advance-sms',
           method: 'POST',
-          description: 'Send advance payment notification WhatsApp messages via Zoko',
+          description: 'Send advance payment SMS via Pertinax (DLT Template)',
           status: 'active',
-          messageType: 'text'
-        },
-        'send-completion-sms': {
-          path: '/api/send-completion-sms',
-          method: 'POST', 
-          description: 'Send payment completion WhatsApp messages via Zoko',
-          status: 'active',
-          messageType: 'text'
+          messageType: 'text',
+          dltTemplateId: '1207176268898361869',
+          senderId: 'MTARTS'
         },
         'status': {
           path: '/api/status',
           method: 'GET',
-          description: 'API health check and Zoko WhatsApp status monitoring',
+          description: 'API health check and Pertinax SMS status monitoring',
           status: 'active'
+        }
+      },
+
+      // Deprecated endpoints
+      deprecatedEndpoints: {
+        'send-sms': {
+          path: '/api/send-sms',
+          status: 'deprecated',
+          reason: 'Migrated to Pertinax DLT-compliant SMS',
+          replacement: 'Use /api/send-advance-sms with proper DLT template'
+        },
+        'send-completion-sms': {
+          path: '/api/send-completion-sms',
+          status: 'deprecated',
+          reason: 'DLT template not registered yet',
+          replacement: 'Will be activated after DLT approval'
         }
       }
     };
@@ -118,9 +153,9 @@ export default async function handler(req, res) {
     const requestInfo = {
       userAgent: req.headers['user-agent'] || 'unknown',
       origin: req.headers.origin || req.headers.referer || 'unknown',
-      ip: req.headers['x-forwarded-for'] || 
-          req.headers['x-real-ip'] || 
-          req.connection?.remoteAddress || 
+      ip: req.headers['x-forwarded-for'] ||
+          req.headers['x-real-ip'] ||
+          req.connection?.remoteAddress ||
           'unknown',
       method: req.method,
       url: req.url,
@@ -128,23 +163,23 @@ export default async function handler(req, res) {
       protocol: req.headers['x-forwarded-proto'] || 'unknown'
     };
 
-    // Zoko Service Status Check
-    let zokoStatus = {
+    // Pertinax Service Status Check
+    let pertinaxStatus = {
       reachable: 'unknown',
       message: 'Service status not tested in basic health check'
     };
 
-    // If query parameter ?testConnection=true is provided, test Zoko connectivity
+    // If query parameter ?testConnection=true is provided, test Pertinax connectivity
     if (req.query?.testConnection === 'true') {
       try {
-        console.log('🧪 Testing Zoko WhatsApp API connectivity...');
-        
-        // Test with a simple API call to check if Zoko is responding
-        const testResponse = await fetch('https://api.zoko.io/v2/account/profile', {
+        console.log('🧪 Testing Pertinax SMS API connectivity...');
+
+        // Test with balance check API
+        const balanceCheckUrl = `http://pertinaxsolution.com/api/mt/GetBalance?APIKey=${PERTINAX_API_KEY}`;
+
+        const testResponse = await fetch(balanceCheckUrl, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${ZOKO_API_KEY}`,
-            'Content-Type': 'application/json',
             'Accept': 'application/json',
             'User-Agent': 'Mitti-Arts-POS-Health-Check/1.0'
           }
@@ -155,42 +190,45 @@ export default async function handler(req, res) {
         if (testResponse.ok) {
           try {
             const testData = await testResponse.json();
-            zokoStatus = {
-              reachable: true,
-              status: 'api_responding',
-              message: 'Zoko WhatsApp API is responding correctly',
+            // Response format: {"ErrorCode":"0","ErrorMessage":"Done","Balance":"Promo:9988|Trans:0"}
+
+            const isSuccess = testData.ErrorCode === '0' || testData.ErrorCode === 0;
+
+            pertinaxStatus = {
+              reachable: isSuccess,
+              status: isSuccess ? 'api_responding' : 'api_error',
+              message: isSuccess ? 'Pertinax SMS API is responding correctly' : `API Error: ${testData.ErrorMessage}`,
               responseTime: `${testTime}ms`,
               httpStatus: testResponse.status,
               accountInfo: {
-                accountConnected: true,
-                businessName: testData.business_name || 'Mitti Arts',
-                whatsappStatus: testData.whatsapp_status || 'connected',
-                accountId: testData.id ? 'available' : 'unknown'
+                balance: testData.Balance || 'unknown',
+                errorCode: testData.ErrorCode,
+                errorMessage: testData.ErrorMessage
               }
             };
           } catch (jsonError) {
-            zokoStatus = {
+            pertinaxStatus = {
               reachable: true,
               status: 'api_responding_no_json',
-              message: 'Zoko API responding but response format unexpected',
+              message: 'Pertinax API responding but response format unexpected',
               responseTime: `${testTime}ms`,
               httpStatus: testResponse.status
             };
           }
         } else {
-          zokoStatus = {
+          pertinaxStatus = {
             reachable: false,
             status: 'connection_failed',
-            message: `Zoko WhatsApp API returned HTTP ${testResponse.status}`,
+            message: `Pertinax SMS API returned HTTP ${testResponse.status}`,
             httpStatus: testResponse.status,
             responseTime: `${testTime}ms`
           };
         }
       } catch (testError) {
-        zokoStatus = {
+        pertinaxStatus = {
           reachable: false,
           status: 'connection_error',
-          message: `Failed to connect to Zoko WhatsApp API: ${testError.message}`,
+          message: `Failed to connect to Pertinax SMS API: ${testError.message}`,
           error: testError.message,
           errorType: testError.name
         };
@@ -200,17 +238,17 @@ export default async function handler(req, res) {
     // Determine overall health status
     let overallStatus = 'healthy';
     let statusCode = 200;
-    let healthMessage = 'All systems operational for Mitti Arts WhatsApp messaging';
+    let healthMessage = 'All systems operational for Mitti Arts SMS messaging';
 
-    if (!ZOKO_API_KEY) {
+    if (!PERTINAX_API_KEY) {
       overallStatus = 'degraded';
-      healthMessage = 'Zoko WhatsApp API key not configured';
+      healthMessage = 'Pertinax SMS API key not configured';
       statusCode = 200; // Still return 200 but indicate degraded status
     }
 
-    if (zokoStatus.reachable === false) {
+    if (pertinaxStatus.reachable === false) {
       overallStatus = 'degraded';
-      healthMessage = 'Zoko WhatsApp API connectivity issues detected';
+      healthMessage = 'Pertinax SMS API connectivity issues detected';
     }
 
     if (responseTime > 5000) {
@@ -224,35 +262,37 @@ export default async function handler(req, res) {
       status: overallStatus,
       message: healthMessage,
       ...healthCheck,
-      
+
       // Core configuration and status
       configuration,
       system: systemInfo,
       request: requestInfo,
       performance,
-      zokoStatus,
-      
+      pertinaxStatus,
+
       // Usage instructions and documentation
       usage: {
-        message: 'Mitti Arts WhatsApp Messaging API powered by Zoko is operational',
-        documentation: 'Send POST requests to WhatsApp endpoints with required parameters',
+        message: 'Mitti Arts SMS Messaging API powered by Pertinax is operational',
+        documentation: 'Send POST requests to SMS endpoints with required parameters',
         support: 'Contact: info@mittiarts.com or 9441550927',
-        testConnection: 'Add ?testConnection=true to test Zoko WhatsApp connectivity'
+        testConnection: 'Add ?testConnection=true to test Pertinax SMS connectivity',
+        dltCompliance: 'All SMS templates are TRAI DLT compliant'
       },
 
-      // Zoko specific information
-      zokoInfo: {
-        provider: 'Zoko',
-        website: 'https://zoko.io',
-        apiEndpoint: ZOKO_API_URL,
-        channel: 'WhatsApp Business API',
-        messageTypes: ['text', 'template', 'media', 'interactive'],
-        supportedCountries: ['Global'],
-        features: ['WhatsApp Messages', 'Broadcast', 'Chatbot', 'Analytics'],
-        estimatedCost: 'Pay per message - varies by country',
-        documentation: 'https://docs.zoko.io',
-        dashboard: 'https://app.zoko.io',
-        support: 'https://zoko.io/support'
+      // Pertinax specific information
+      pertinaxInfo: {
+        provider: 'Pertinax Solution',
+        website: 'http://pertinaxsolution.com',
+        apiEndpoint: PERTINAX_API_URL,
+        channel: 'SMS Gateway',
+        senderId: PERTINAX_SENDER_ID,
+        messageTypes: ['text'],
+        supportedCountries: ['India'],
+        features: ['DLT Compliant Templates', 'Transactional SMS', 'Delivery Reports', 'Balance Check'],
+        estimatedCost: 'Pay per message - Rs. 0.15-0.25 per SMS',
+        documentation: 'http://pertinaxsolution.com/Web/WebAPI/',
+        dltRegistration: 'JIO TrueConnect DLT Portal',
+        traiCompliant: true
       },
 
       // Mitti Arts business specific information
@@ -263,21 +303,20 @@ export default async function handler(req, res) {
         contact: '9441550927 / 7382150250',
         email: 'info@mittiarts.com',
         address: 'Opp. Romoji Film City, Main Gate, Near Maisamma Temple, Hyderabad',
-        whatsappTypes: [
-          'Invoice/Bill WhatsApp Messages',
-          'Advance Payment WhatsApp Messages', 
-          'Payment Completion WhatsApp Messages',
-          'Order Status WhatsApp Messages'
+        smsTypes: [
+          'Advance Payment SMS (Active)',
+          'Full Payment Invoice SMS (Pending DLT)',
+          'Payment Completion SMS (Pending DLT)'
         ],
         targetMarket: 'Indian pottery and handicraft customers',
         phoneFormat: 'Indian mobile numbers (10 digits starting with 6, 7, 8, or 9)',
-        messagingSystem: 'WhatsApp Business messages for pottery orders with invoice links',
+        messagingSystem: 'DLT-compliant SMS for pottery orders with invoice links',
         specialFeatures: [
-          'Pottery-themed messaging with emojis',
+          'TRAI DLT Compliant',
           'Advance payment tracking',
           'Order completion notifications',
-          'Store pickup instructions',
-          'Care instructions for pottery items'
+          'Invoice link sharing',
+          'Template-based messaging'
         ]
       },
 
@@ -288,35 +327,37 @@ export default async function handler(req, res) {
         healthCheckTime: performance.responseTime,
         apiVersion: healthCheck.version,
         lastHealthCheck: healthCheck.timestamp,
-        whatsappChannel: 'Enabled',
-        messagingProvider: 'Zoko',
+        smsChannel: 'Enabled',
+        messagingProvider: 'Pertinax',
         testConnectionAvailable: true,
-        supportedMessageTypes: ['Invoice', 'Advance Payment', 'Payment Completion', 'Custom']
+        supportedMessageTypes: ['Advance Payment', 'Full Payment (Pending)', 'Completion (Pending)'],
+        dltTemplatesRegistered: 1,
+        dltTemplatesPending: 2
       }
     };
 
-    console.log(`✅ Zoko WhatsApp status check completed in ${performance.responseTime} - Status: ${overallStatus}`);
+    console.log(`✅ Pertinax SMS status check completed in ${performance.responseTime} - Status: ${overallStatus}`);
 
     return res.status(statusCode).json(response);
 
   } catch (error) {
     console.error('❌ Status check error:', error);
-    
+
     const errorResponse = {
       success: false,
       status: 'error',
       message: 'Internal server error during health check',
       error: 'Health check system failure',
       timestamp: new Date().toISOString(),
-      provider: 'Zoko WhatsApp API',
-      service: 'Mitti Arts WhatsApp Messaging',
-      
+      provider: 'Pertinax SMS API',
+      service: 'Mitti Arts SMS Messaging',
+
       performance: {
         responseTime: `${Date.now() - startTime}ms`,
         failed: true,
         errorTime: new Date().toISOString()
       },
-      
+
       // Include debug information in development
       ...(process.env.NODE_ENV === 'development' && {
         debug: {
@@ -325,19 +366,19 @@ export default async function handler(req, res) {
           type: error.constructor.name
         }
       }),
-      
+
       // Basic troubleshooting information
       troubleshooting: {
         possibleCauses: [
           'Server overload',
           'Memory issues',
           'Network connectivity problems',
-          'Zoko WhatsApp API issues',
+          'Pertinax SMS API issues',
           'Invalid API configuration'
         ],
         recommendations: [
           'Check server resources',
-          'Verify Zoko WhatsApp API status at zoko.io',
+          'Verify Pertinax SMS API status',
           'Review error logs',
           'Test with ?testConnection=true parameter',
           'Contact system administrator'
@@ -345,11 +386,11 @@ export default async function handler(req, res) {
         support: {
           mittiArts: 'info@mittiarts.com',
           phone: '9441550927',
-          zoko: 'https://zoko.io/support'
+          pertinax: 'http://pertinaxsolution.com'
         }
       }
     };
-    
+
     return res.status(500).json(errorResponse);
   }
 }

@@ -1123,7 +1123,6 @@ const Billing = () => {
           </Col>
         </Row>
       </div>
-
       <ProductModal 
         visible={showProductModal}
         onCancel={handleCloseProductModal}
