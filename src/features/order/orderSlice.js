@@ -14,6 +14,24 @@ const generateShareToken = () => {
   return `${timestamp}${random}`;
 };
 
+// Helper function to generate short token (4-char for SMS URLs)
+const generateShortToken = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let token = '';
+  const array = new Uint8Array(4);
+  if (typeof window !== 'undefined' && window.crypto) {
+    window.crypto.getRandomValues(array);
+  } else {
+    for (let i = 0; i < 4; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    token += chars[array[i] % chars.length];
+  }
+  return token;
+};
+
 // Helper function to safely handle SMS operations without affecting order creation
 const handleSMSDelivery = async (orderId, operation, context = '') => {
   try {
@@ -202,6 +220,9 @@ export const createOrder = createAsyncThunk(
       // 🆕 GENERATE SHARE TOKEN FOR PUBLIC ACCESS
       const shareToken = generateShareToken();
 
+      // 🆕 GENERATE SHORT TOKEN FOR SMS URLs (4 chars = 28 char URL)
+      const shortToken = generateShortToken();
+
       // Helper to deeply remove undefined fields
       function removeUndefinedDeep(obj) {
         if (Array.isArray(obj)) {
@@ -226,6 +247,9 @@ export const createOrder = createAsyncThunk(
         
         // 🆕 ADD SHARE TOKEN
         shareToken,
+
+        // 🆕 ADD SHORT TOKEN FOR SMS URLs
+        shortToken,
         
         // Mitti Arts business fields
         businessType: orderData.businessType,
@@ -295,6 +319,7 @@ export const createOrder = createAsyncThunk(
       const order = await firebaseService.create('orders', enhancedOrderData);
       console.log('Mitti Arts order created successfully:', order.id);
       console.log('🔗 Share token generated:', shareToken);
+      console.log('🔗 Short token generated:', shortToken);
 
       // Get customer data for SMS and invoice
       let customer = null;
@@ -338,14 +363,16 @@ export const createOrder = createAsyncThunk(
           let smsResult;
 
           if (orderData.isAdvanceBilling) {
-            // Send advance payment SMS
+            // Generate short URL for SMS (28 chars: invoice.mittiarts.com/i/XXXX)
+            const shortUrl = `invoice.mittiarts.com/i/${shortToken}`;
+            console.log('📱 Using short URL for SMS:', shortUrl, `(${shortUrl.length} chars)`);
+
+            // Send advance payment SMS with short URL
             smsResult = await smsService.sendAdvancePaymentSMS(
               customerPhone,
               customerName,
-              orderNumber,
               advanceAmount,
-              remainingAmount,
-              billToken
+              shortUrl
             );
           } else {
             // Send regular bill SMS

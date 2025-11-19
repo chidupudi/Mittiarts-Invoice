@@ -77,10 +77,11 @@ export default async function handler(req, res) {
     apiUrl.searchParams.append('DLTTemplateId', DLT_TEMPLATE_ID); // DLT Template ID
 
     console.log('📡 Calling Pertinax SMS API...');
-    console.log('🔧 API URL:', PERTINAX_API_URL);
+    console.log('🔧 Full API URL:', apiUrl.toString());
     console.log('📱 Recipient:', `91${cleanNumber}`);
     console.log('📋 Template ID:', DLT_TEMPLATE_ID);
     console.log('🏷️ Sender ID:', PERTINAX_SENDER_ID);
+    console.log('📝 SMS Text:', finalSmsText);
 
     // Call Pertinax API
     const pertinaxResponse = await fetch(apiUrl.toString(), {

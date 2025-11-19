@@ -1,4 +1,6 @@
 // src/services/smsService.js - Pertinax SMS Service with DLT Template Support
+import { generateShortToken, generateShortUrl } from '../utils/shortUrl';
+
 class SMSService {
   constructor() {
     this.baseURL = '/api';
@@ -264,6 +266,47 @@ class SMSService {
     const timestamp = Date.now().toString(36);
     const randomPart = Math.random().toString(36).substring(2, 11);
     return `MITTI_${timestamp}_${randomPart}`.toUpperCase();
+  }
+
+  /**
+   * Generate short token and URL for SMS
+   * @returns {Object} { shortToken, shortUrl }
+   */
+  generateShortUrlForSMS() {
+    const shortToken = generateShortToken(4);
+    const shortUrl = generateShortUrl(shortToken);
+
+    console.log('🔗 Generated short URL for SMS:', {
+      shortToken,
+      shortUrl,
+      length: shortUrl.length
+    });
+
+    return { shortToken, shortUrl };
+  }
+
+  /**
+   * Send advance payment SMS with short URL
+   * @param {string} phoneNumber - Customer phone number (10 digits)
+   * @param {string} customerName - Customer name
+   * @param {number} advanceAmount - Advance payment amount
+   * @param {string} shortUrl - Short invoice URL (28 chars max)
+   * @returns {Promise} Response object
+   */
+  async sendAdvancePaymentSMSWithShortUrl(phoneNumber, customerName, advanceAmount, shortUrl) {
+    console.log('📱 Sending advance payment SMS with short URL...', {
+      phone: `${phoneNumber.slice(0, 5)}*****`,
+      customer: customerName,
+      advance: advanceAmount,
+      urlLength: shortUrl?.length
+    });
+
+    // Validate URL length (must be <= 30 chars for DLT variable)
+    if (shortUrl && shortUrl.length > 30) {
+      console.warn('⚠️ Short URL exceeds 30 chars:', shortUrl.length);
+    }
+
+    return this.sendAdvancePaymentSMS(phoneNumber, customerName, advanceAmount, shortUrl);
   }
 
   /**

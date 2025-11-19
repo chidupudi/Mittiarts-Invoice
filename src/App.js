@@ -35,6 +35,7 @@ const EstimateView = lazy(() => import('./components/estimation/EstimateView'));
 // Public Components (no login required) - these should load fast
 const PublicInvoice = lazy(() => import('./components/public/PublicInvoice'));
 const PublicEstimate = lazy(() => import('./components/public/PublicEstimate'));
+const ShortUrlRedirect = lazy(() => import('./components/public/ShortUrlRedirect'));
 
 const antdTheme = {
   token: {
@@ -301,7 +302,15 @@ const AppContent = memo(() => {
             </Suspense>
           </ErrorBoundary>
         } />
-        
+        {/* Short URL redirect route - /i/XXXX -> /public/invoice/:token */}
+        <Route path="/i/:shortToken" element={
+          <ErrorBoundary>
+            <Suspense fallback={<SuspenseFallback componentName="Invoice" />}>
+              <ShortUrlRedirect />
+            </Suspense>
+          </ErrorBoundary>
+        } />
+
         {/* PROTECTED ROUTES - Authentication required */}
         <Route 
           path="/*" 

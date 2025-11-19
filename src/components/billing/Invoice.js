@@ -257,7 +257,7 @@ const Invoice = () => {
     }
   };
 
-  // 🆕 UPDATED SHARE FUNCTION - Replace your existing handleShare function with this
+  // 🆕 UPDATED SHARE FUNCTION - Now uses short URLs for easy sharing
   const handleShare = async () => {
     if (!currentOrder) {
       message.error('Order not found');
@@ -267,74 +267,111 @@ const Invoice = () => {
     setShareLoading(true);
     try {
       let shareToken = currentOrder.shareToken;
-      
+      let shortToken = currentOrder.shortToken;
+      let needsUpdate = false;
+
       // 🆕 If order doesn't have shareToken, generate one
       if (!shareToken) {
         console.log('🔧 Generating share token for existing order...');
-        
-        // Generate new token
+
+        // Generate new share token
         const timestamp = Date.now().toString(36);
         const random = Math.random().toString(36).substr(2, 8);
         shareToken = `${timestamp}${random}`;
-        
-        // Save to Firebase
+        needsUpdate = true;
+
+        console.log('✅ Share token generated:', shareToken);
+      }
+
+      // 🆕 If order doesn't have shortToken, generate one for short URL
+      if (!shortToken) {
+        console.log('🔧 Generating short token for existing order...');
+
+        // Generate 4-char short token
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        let newShortToken = '';
+        const array = new Uint8Array(4);
+        if (window.crypto) {
+          window.crypto.getRandomValues(array);
+        } else {
+          for (let i = 0; i < 4; i++) {
+            array[i] = Math.floor(Math.random() * 256);
+          }
+        }
+        for (let i = 0; i < 4; i++) {
+          newShortToken += chars[array[i] % chars.length];
+        }
+        shortToken = newShortToken;
+        needsUpdate = true;
+
+        console.log('✅ Short token generated:', shortToken);
+      }
+
+      // Save both tokens to Firebase if either was newly generated
+      if (needsUpdate) {
         await firebaseService.update('orders', currentOrder.id, {
           shareToken: shareToken,
+          shortToken: shortToken,
           shareTokenGeneratedAt: new Date()
         });
-        
-        // Update local state
-        currentOrder.shareToken = shareToken;
-        
-        console.log('✅ Share token generated and saved:', shareToken);
+        console.log('✅ Tokens saved to Firebase');
       }
-      
-      // Generate the shareable URL
-      const shareUrl = `${window.location.origin}/public/invoice/${shareToken}`;
-      
+
+      // Generate the short shareable URL (28 chars)
+      const shortUrl = `invoice.mittiarts.com/i/${shortToken}`;
+
       // Copy to clipboard
-      await navigator.clipboard.writeText(shareUrl);
-      
-      message.success('🎉 Share link copied to clipboard!');
-      
+      await navigator.clipboard.writeText(shortUrl);
+
+      message.success('🎉 Short link copied to clipboard!');
+
       // Log the share action
       console.log('📤 Invoice shared:', {
         orderId: currentOrder.id,
         orderNumber: currentOrder.orderNumber,
-        shareToken: shareToken,
-        shareUrl,
+        shortToken: shortToken,
+        shortUrl,
         sharedAt: new Date().toISOString()
       });
-      
+
     } catch (error) {
       console.error('Share error:', error);
-      
+
       // Fallback for older browsers
       try {
         let shareToken = currentOrder.shareToken;
-        
+        let shortToken = currentOrder.shortToken;
+
         if (!shareToken) {
           const timestamp = Date.now().toString(36);
           const random = Math.random().toString(36).substr(2, 8);
           shareToken = `${timestamp}${random}`;
-          
-          await firebaseService.update('orders', currentOrder.id, {
-            shareToken: shareToken,
-            shareTokenGeneratedAt: new Date()
-          });
-          
-          currentOrder.shareToken = shareToken;
         }
-        
-        const shareUrl = `${window.location.origin}/public/invoice/${shareToken}`;
+
+        if (!shortToken) {
+          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+          let newShortToken = '';
+          for (let i = 0; i < 4; i++) {
+            newShortToken += chars[Math.floor(Math.random() * chars.length)];
+          }
+          shortToken = newShortToken;
+        }
+
+        await firebaseService.update('orders', currentOrder.id, {
+          shareToken: shareToken,
+          shortToken: shortToken,
+          shareTokenGeneratedAt: new Date()
+        });
+
+        const shortUrl = `invoice.mittiarts.com/i/${shortToken}`;
         const textArea = document.createElement('textarea');
-        textArea.value = shareUrl;
+        textArea.value = shortUrl;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        
-        message.success('Share link copied to clipboard!');
+
+        message.success('Short link copied to clipboard!');
       } catch (fallbackError) {
         message.error('Failed to generate share link. Please try again.');
       }
