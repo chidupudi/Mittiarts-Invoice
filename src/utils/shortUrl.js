@@ -43,8 +43,7 @@ export const generateShortToken = (length = 4) => {
  */
 export const generateShortUrl = (shortToken) => {
   // Production URL format: invoice.mittiarts.com/i/XXXX (28 chars)
-  const baseUrl = process.env.REACT_APP_SHORT_URL_BASE || 'invoice.mittiarts.com';
-  return `${baseUrl}/i/${shortToken}`;
+  return `invoice.mittiarts.com/i/${shortToken}`;
 };
 
 /**
@@ -53,8 +52,7 @@ export const generateShortUrl = (shortToken) => {
  * @returns {string} Full public invoice URL
  */
 export const generateFullInvoiceUrl = (shareToken) => {
-  const baseUrl = process.env.REACT_APP_BASE_URL || 'https://invoice.mittiarts.com';
-  return `${baseUrl}/public/invoice/${shareToken}`;
+  return `https://invoice.mittiarts.com/public/invoice/${shareToken}`;
 };
 
 /**

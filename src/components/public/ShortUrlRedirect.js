@@ -1,5 +1,6 @@
 // src/components/public/ShortUrlRedirect.js
 // Redirects short URLs (/i/XXXX) to full invoice URLs
+// PUBLIC ACCESS - No authentication required
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -27,7 +28,8 @@ const ShortUrlRedirect = () => {
           return;
         }
 
-        // Query orders collection for shortToken
+        // Query orders collection for shortToken - PUBLIC ACCESS
+        // This query needs Firestore security rules to allow public read for shortToken queries
         const ordersRef = collection(db, 'orders');
         const q = query(
           ordersRef,
@@ -44,13 +46,14 @@ const ShortUrlRedirect = () => {
           return;
         }
 
-        // Get the order data
-        let orderData = null;
+        // Get the order data - only need shareToken for redirect
+        let shareToken = null;
         querySnapshot.forEach((doc) => {
-          orderData = { id: doc.id, ...doc.data() };
+          const data = doc.data();
+          shareToken = data.shareToken;
         });
 
-        if (!orderData || !orderData.shareToken) {
+        if (!shareToken) {
           console.warn('❌ Order found but no shareToken:', shortToken);
           setError('Invoice link is incomplete');
           setLoading(false);
@@ -58,12 +61,19 @@ const ShortUrlRedirect = () => {
         }
 
         // Redirect to full invoice URL
-        console.log('✅ Redirecting to full invoice:', orderData.shareToken.slice(0, 10) + '...');
-        navigate(`/public/invoice/${orderData.shareToken}`, { replace: true });
+        console.log('✅ Redirecting to full invoice:', shareToken.slice(0, 10) + '...');
+        navigate(`/public/invoice/${shareToken}`, { replace: true });
 
       } catch (err) {
         console.error('❌ Error resolving short URL:', err);
-        setError('Unable to load invoice. Please try again.');
+
+        // Check if it's a permissions error
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          setError('Invoice access error. Please contact support.');
+          console.error('⚠️ Firestore security rules need to be updated to allow public shortToken queries');
+        } else {
+          setError('Unable to load invoice. Please try again.');
+        }
         setLoading(false);
       }
     };
