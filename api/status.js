@@ -72,15 +72,17 @@ export default async function handler(req, res) {
             category: 'Consumer goods and automobiles',
             status: 'approved',
             endpoint: '/api/send-advance-sms'
+          },
+          {
+            name: 'invoice',
+            id: '1207176364615544587',
+            type: 'Service Implicit',
+            category: 'Consumer goods and automobiles',
+            status: 'approved',
+            endpoint: '/api/send-full-invoice-sms'
           }
         ],
         pending: [
-          {
-            name: 'invoice_full_payment',
-            id: 'pending',
-            type: 'Service Implicit',
-            status: 'not_registered'
-          },
           {
             name: 'invoice_payment_complete',
             id: 'pending',
@@ -101,6 +103,15 @@ export default async function handler(req, res) {
           dltTemplateId: '1207176268898361869',
           senderId: 'MTARTS'
         },
+        'send-full-invoice-sms': {
+          path: '/api/send-full-invoice-sms',
+          method: 'POST',
+          description: 'Send full invoice SMS via Pertinax (DLT Template)',
+          status: 'active',
+          messageType: 'text',
+          dltTemplateId: '1207176364615544587',
+          senderId: 'MTARTS'
+        },
         'status': {
           path: '/api/status',
           method: 'GET',
@@ -115,7 +126,7 @@ export default async function handler(req, res) {
           path: '/api/send-sms',
           status: 'deprecated',
           reason: 'Migrated to Pertinax DLT-compliant SMS',
-          replacement: 'Use /api/send-advance-sms with proper DLT template'
+          replacement: 'Use /api/send-advance-sms or /api/send-full-invoice-sms'
         },
         'send-completion-sms': {
           path: '/api/send-completion-sms',
@@ -330,9 +341,9 @@ export default async function handler(req, res) {
         smsChannel: 'Enabled',
         messagingProvider: 'Pertinax',
         testConnectionAvailable: true,
-        supportedMessageTypes: ['Advance Payment', 'Full Payment (Pending)', 'Completion (Pending)'],
-        dltTemplatesRegistered: 1,
-        dltTemplatesPending: 2
+        supportedMessageTypes: ['Advance Payment', 'Full Invoice', 'Completion (Pending)'],
+        dltTemplatesRegistered: 2,
+        dltTemplatesPending: 1
       }
     };
 

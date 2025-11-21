@@ -362,11 +362,11 @@ export const createOrder = createAsyncThunk(
 
           let smsResult;
 
-          if (orderData.isAdvanceBilling) {
-            // Generate short URL for SMS (28 chars: invoice.mittiarts.com/i/XXXX)
-            const shortUrl = `invoice.mittiarts.com/i/${shortToken}`;
-            console.log('📱 Using short URL for SMS:', shortUrl, `(${shortUrl.length} chars)`);
+          // Generate short URL for SMS (28 chars: invoice.mittiarts.com/i/XXXX)
+          const shortUrl = `invoice.mittiarts.com/i/${shortToken}`;
+          console.log('📱 Using short URL for SMS:', shortUrl, `(${shortUrl.length} chars)`);
 
+          if (orderData.isAdvanceBilling) {
             // Send advance payment SMS with short URL
             smsResult = await smsService.sendAdvancePaymentSMS(
               customerPhone,
@@ -375,13 +375,12 @@ export const createOrder = createAsyncThunk(
               shortUrl
             );
           } else {
-            // Send regular bill SMS
+            // Send full invoice SMS with short URL
             smsResult = await smsService.sendBillSMS(
               customerPhone,
               customerName,
-              orderNumber,
-              billToken,
-              finalTotal
+              finalTotal,
+              shortUrl
             );
           }
 

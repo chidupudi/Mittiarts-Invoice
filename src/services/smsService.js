@@ -20,9 +20,14 @@ class SMSService {
         name: 'advance--payments',
         template: 'Dear {#var#}, advance payment of Rs.{#var#} received. View invoice: {#var#} Thank you! - Mitti Arts',
         variables: ['customerName', 'advanceAmount', 'invoiceLink']
+      },
+      fullInvoice: {
+        id: '1207176364615544587',
+        name: 'invoice',
+        template: 'Dear {#var#}, your Mitti Arts invoice of Rs.{#var#} is ready. View invoice: {#var#}\n\nMitti Arts – ART OF INDIAN POTTERY\nWe craft sustainable and eco-friendly products.\nPlease visit our web application for the latest collections: www.mittiarts.com',
+        variables: ['customerName', 'totalAmount', 'invoiceLink']
       }
-      // Future templates will be added here:
-      // fullPayment: { id: '', name: 'invoice_full_payment', ... },
+      // Future templates:
       // paymentComplete: { id: '', name: 'invoice_payment_complete', ... }
     };
   }
@@ -193,25 +198,57 @@ class SMSService {
   }
 
   /**
-   * Send regular bill/invoice SMS (NOT AVAILABLE - DLT template not registered)
+   * Send regular bill/invoice SMS using DLT template
    * @param {string} phoneNumber - Customer phone number
    * @param {string} customerName - Customer name
-   * @param {string} orderNumber - Order number
-   * @param {string} billToken - Bill token
    * @param {number} totalAmount - Total amount
+   * @param {string} invoiceLink - Invoice URL (short URL)
    * @returns {Promise} Response object
    */
-  async sendBillSMS(phoneNumber, customerName, orderNumber, billToken, totalAmount) {
-    console.warn('⚠️ sendBillSMS called but DLT template not registered yet');
+  async sendBillSMS(phoneNumber, customerName, totalAmount, invoiceLink) {
+    console.log('📱 Sending full invoice SMS via Pertinax...', {
+      phone: `${phoneNumber.slice(0, 5)}*****`,
+      customer: customerName,
+      total: totalAmount
+    });
 
-    return {
-      success: false,
-      error: 'Full payment invoice SMS template not registered with DLT yet. Please register the template first.',
-      provider: 'Pertinax SMS',
-      smsType: 'bill',
-      templateStatus: 'not_registered',
-      recommendation: 'Use advance payment SMS for now, or register full payment template on JIO DLT Portal'
-    };
+    try {
+      // Clean and validate phone number
+      const cleanNumber = this.cleanPhoneNumber(phoneNumber);
+      if (!this.isValidPhoneNumber(cleanNumber)) {
+        throw new Error('Invalid phone number format. Must be 10 digits starting with 6-9.');
+      }
+
+      // Prepare template variables
+      const variables = {
+        customerName: this.sanitizeVariable(customerName, 40),
+        totalAmount: this.formatAmount(totalAmount),
+        invoiceLink: invoiceLink || 'N/A'
+      };
+
+      // Build SMS text by replacing template variables
+      const smsText = this.buildTemplateText('fullInvoice', variables);
+
+      // Send SMS via serverless function
+      const payload = {
+        phoneNumber: cleanNumber,
+        customerName: variables.customerName,
+        totalAmount: variables.totalAmount,
+        invoiceLink: variables.invoiceLink,
+        smsText: smsText
+      };
+
+      return await this.sendRequest('/send-full-invoice-sms', payload, 'full-invoice');
+
+    } catch (error) {
+      console.error('❌ Full invoice SMS error:', error);
+      return {
+        success: false,
+        error: error.message,
+        provider: 'Pertinax SMS',
+        smsType: 'full-invoice'
+      };
+    }
   }
 
   /**
