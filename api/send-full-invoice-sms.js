@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     // Pertinax API Configuration
     const PERTINAX_API_KEY = '2ogC0TMtJkioQY1eLYAt4w';
     const PERTINAX_SENDER_ID = 'MTARTS';
-    const DLT_TEMPLATE_ID = '1207176364615544587';
+    const DLT_TEMPLATE_ID = '1207176379777481213';
     const PERTINAX_API_URL = 'http://pertinaxsolution.com/api/mt/SendSMS';
 
     // Prepare SMS text (use provided text or build from template)
@@ -60,13 +60,13 @@ export default async function handler(req, res) {
       finalSmsText = smsText;
     } else {
       // Build SMS text from template with variables replaced
-      // Template: Dear {#var#}, your Mitti Arts invoice of Rs.{#var#} is ready. View invoice: {#var#} Mitti Arts – ART OF INDIAN POTTERY...
+      // Template ID: 1207176379777481213 - Advance_Invoice
       finalSmsText = `Dear ${customerName.trim()}, your Mitti Arts invoice of Rs.${totalAmount} is ready.
 View invoice: ${invoiceLink || 'N/A'}
 
-Mitti Arts – ART OF INDIAN POTTERY
+Mitti Arts - ART OF INDIAN POTTERY
 We craft sustainable and eco-friendly products.
-Please visit our web application for the latest collections: www.mittiarts.com`;
+Please visit our web application for the latest collections: https://mittiarts.com`;
     }
 
     console.log('📝 SMS Text Preview:', finalSmsText.substring(0, 80) + '...');
@@ -179,7 +179,7 @@ Please visit our web application for the latest collections: www.mittiarts.com`;
             'Insufficient balance in Pertinax account'
           ],
           recommendations: [
-            'Verify DLT template ID: 1207176364615544587',
+            'Verify DLT template ID: 1207176379777481213',
             'Check if sender ID MTARTS is approved',
             'Verify API key: 2ogC0TMt...',
             'Ensure SMS text matches template exactly',

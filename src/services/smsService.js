@@ -22,9 +22,9 @@ class SMSService {
         variables: ['customerName', 'advanceAmount', 'invoiceLink']
       },
       fullInvoice: {
-        id: '1207176364615544587',
-        name: 'invoice',
-        template: 'Dear {#var#}, your Mitti Arts invoice of Rs.{#var#} is ready. View invoice: {#var#}\n\nMitti Arts – ART OF INDIAN POTTERY\nWe craft sustainable and eco-friendly products.\nPlease visit our web application for the latest collections: www.mittiarts.com',
+        id: '1207176379777481213',
+        name: 'Advance_Invoice',
+        template: 'Dear {#var#}, your Mitti Arts invoice of Rs.{#var#} is ready. View invoice: {#var#}\n\nMitti Arts - ART OF INDIAN POTTERY\nWe craft sustainable and eco-friendly products.\nPlease visit our web application for the latest collections: https://mittiarts.com',
         variables: ['customerName', 'totalAmount', 'invoiceLink']
       }
       // Future templates:

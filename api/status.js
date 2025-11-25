@@ -74,8 +74,8 @@ export default async function handler(req, res) {
             endpoint: '/api/send-advance-sms'
           },
           {
-            name: 'invoice',
-            id: '1207176364615544587',
+            name: 'Advance_Invoice',
+            id: '1207176379777481213',
             type: 'Service Implicit',
             category: 'Consumer goods and automobiles',
             status: 'approved',
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
           description: 'Send full invoice SMS via Pertinax (DLT Template)',
           status: 'active',
           messageType: 'text',
-          dltTemplateId: '1207176364615544587',
+          dltTemplateId: '1207176379777481213',
           senderId: 'MTARTS'
         },
         'status': {
