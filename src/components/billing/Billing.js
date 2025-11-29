@@ -25,7 +25,8 @@ import {
   PayCircleOutlined,
   FileTextOutlined,
   ShopOutlined,
-  BankOutlined
+  BankOutlined,
+  UserOutlined
 } from '@ant-design/icons';
 import { fetchBranches, fetchStalls } from '../../features/storefront/storefrontSlice';
 import { 
@@ -256,14 +257,17 @@ const Billing = () => {
     }
   };
 
+  // Store phone number for new customer
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+
   // Customer handling
   const handleAddDynamicCustomer = async () => {
     try {
       const values = await customerForm.validateFields();
-      
+
       const result = await dispatch(createCustomer({
         name: values.name,
-        phone: values.phone || '',
+        phone: values.phone || newCustomerPhone || '',
         email: values.email || '',
         businessType: businessType,
         preferredBranch: selectedBranch,
@@ -274,6 +278,7 @@ const Billing = () => {
         setSelectedCustomer(result.payload);
         customerForm.resetFields();
         setShowCustomerModal(false);
+        setNewCustomerPhone('');
         message.success('Customer added successfully!');
         dispatch(fetchCustomers({}));
       }
@@ -522,442 +527,136 @@ const Billing = () => {
         />
       )}
 
-      {/* Systematic Billing Flow */}
+      {/* Billing Flow */}
       <div style={{ height: 'calc(100% - 80px)' }}>
-        {/* Step Progress Indicator */}
-        <div style={{
-          background: 'rgba(255,255,255,0.95)',
-          padding: '16px 24px',
-          borderRadius: '12px',
-          marginBottom: '24px',
-          border: '1px solid rgba(255,255,255,0.6)',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          <Row gutter={8} align="middle">
-            <Col span={24}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', fontSize: '14px', fontWeight: '500' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: selectedCustomer ? '#52c41a' : '#8b4513',
-                  fontWeight: 'bold',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  background: selectedCustomer ? 'rgba(82, 196, 26, 0.1)' : 'rgba(139, 69, 19, 0.1)',
-                  border: `1px solid ${selectedCustomer ? '#52c41a' : '#8b4513'}20`
-                }}>
-                  <span style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: selectedCustomer ? '#52c41a' : '#8b4513',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    {selectedCustomer ? '✓' : '1'}
-                  </span>
-                  Customer Details
-                </div>
-                <span style={{ color: '#d0d7de', fontSize: '16px' }}>→</span>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: selectedCustomer ? '#8b4513' : '#8c8c8c',
-                  fontWeight: selectedCustomer ? 'bold' : 'normal',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  background: selectedCustomer ? 'rgba(139, 69, 19, 0.1)' : 'rgba(140, 140, 140, 0.1)',
-                  border: `1px solid ${selectedCustomer ? '#8b4513' : '#8c8c8c'}20`,
-                  opacity: selectedCustomer ? 1 : 0.6
-                }}>
-                  <span style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: selectedCustomer ? '#8b4513' : '#8c8c8c',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    2
-                  </span>
-                  Business Type
-                </div>
-                <span style={{ color: '#d0d7de', fontSize: '16px' }}>→</span>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: (selectedCustomer && cart.length > 0) ? '#52c41a' : (selectedCustomer ? '#8b4513' : '#8c8c8c'),
-                  fontWeight: (selectedCustomer && cart.length > 0) ? 'bold' : (selectedCustomer ? 'bold' : 'normal'),
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  background: (selectedCustomer && cart.length > 0) ? 'rgba(82, 196, 26, 0.1)' : (selectedCustomer ? 'rgba(139, 69, 19, 0.1)' : 'rgba(140, 140, 140, 0.1)'),
-                  border: `1px solid ${(selectedCustomer && cart.length > 0) ? '#52c41a' : (selectedCustomer ? '#8b4513' : '#8c8c8c')}20`,
-                  opacity: selectedCustomer ? 1 : 0.6
-                }}>
-                  <span style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: (selectedCustomer && cart.length > 0) ? '#52c41a' : (selectedCustomer ? '#8b4513' : '#8c8c8c'),
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    {(selectedCustomer && cart.length > 0) ? '✓' : '3'}
-                  </span>
-                  Product Selection
-                </div>
-                <span style={{ color: '#d0d7de', fontSize: '16px' }}>→</span>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#8c8c8c',
-                  fontWeight: (selectedCustomer && cart.length > 0) ? 'bold' : 'normal',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  background: (selectedCustomer && cart.length > 0) ? 'rgba(139, 69, 19, 0.1)' : 'rgba(140, 140, 140, 0.1)',
-                  border: `1px solid ${(selectedCustomer && cart.length > 0) ? '#8b4513' : '#8c8c8c'}20`,
-                  opacity: (selectedCustomer && cart.length > 0) ? 1 : 0.6
-                }}>
-                  <span style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#8c8c8c',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    4
-                  </span>
-                  Payment Options
-                </div>
-                <span style={{ color: '#d0d7de', fontSize: '16px' }}>→</span>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#8c8c8c',
-                  fontWeight: (selectedCustomer && cart.length > 0) ? 'bold' : 'normal',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  background: (selectedCustomer && cart.length > 0) ? 'rgba(139, 69, 19, 0.1)' : 'rgba(140, 140, 140, 0.1)',
-                  border: `1px solid ${(selectedCustomer && cart.length > 0) ? '#8b4513' : '#8c8c8c'}20`,
-                  opacity: (selectedCustomer && cart.length > 0) ? 1 : 0.6
-                }}>
-                  <span style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#8c8c8c',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    5
-                  </span>
-                  Final Review
-                </div>
-              </div>
-            </Col>
-          </Row>
-        </div>
 
-        <Row gutter={24}>
-          {/* Left Column - Step by Step Flow */}
-          <Col xs={24} lg={14}>
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-              {/* STEP 1: Customer Details */}
-              <Card
-                title={
-                  <Space>
-                    <span style={{
-                      background: selectedCustomer
-                        ? 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)'
-                        : 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)',
-                      color: 'white',
-                      borderRadius: '50%',
-                      width: '32px',
-                      height: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+        {/* Main Content Row */}
+        <Row gutter={16}>
+          {/* Left Column - Customer, Business Type & Products */}
+          <Col xs={24} lg={16}>
+            {/* Customer & Business Type - Compact Combined Card */}
+            <Card
+              size="small"
+              style={{
+                borderColor: selectedCustomer ? '#52c41a' : '#8b4513',
+                borderWidth: '2px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                marginBottom: '16px'
+              }}
+              bodyStyle={{ padding: '12px' }}
+            >
+              <Row gutter={12}>
+                {/* Customer Selection */}
+                <Col xs={24} lg={14}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <Text strong style={{ fontSize: '13px', color: '#8b4513' }}>
+                      <UserOutlined /> Customer Phone
+                    </Text>
+                  </div>
+                  <CustomerSelection
+                    selectedCustomer={selectedCustomer}
+                    customers={customers}
+                    onSelectCustomer={setSelectedCustomer}
+                    onShowCustomerModal={() => setShowCustomerModal(true)}
+                    onPhoneNumberChange={setNewCustomerPhone}
+                  />
+                  {selectedCustomer && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px',
+                      background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      border: '1px solid #b7eb8f'
                     }}>
-                      {selectedCustomer ? '✓' : '1'}
-                    </span>
-                    <span style={{ fontSize: '16px', fontWeight: '600' }}>STEP 1: Customer Details</span>
-                  </Space>
-                }
-                size="small"
-                style={{
-                  borderColor: selectedCustomer ? '#52c41a' : '#8b4513',
-                  borderWidth: '2px',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                  background: 'rgba(255,255,255,0.95)',
-                  backdropFilter: 'blur(10px)',
-                  transition: 'all 0.3s ease',
-                  cursor: selectedCustomer ? 'default' : 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
-                }}
-                bodyStyle={{ padding: '20px' }}
-              >
-                <CustomerSelection
-                  selectedCustomer={selectedCustomer}
-                  customers={customers}
-                  onSelectCustomer={setSelectedCustomer}
-                  onShowCustomerModal={() => setShowCustomerModal(true)}
-                />
-                {selectedCustomer && (
-                  <div style={{
-                    marginTop: '16px',
-                    padding: '16px',
-                    background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    border: '1px solid #b7eb8f'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{
-                        background: '#52c41a',
-                        color: 'white',
-                        borderRadius: '50%',
-                        width: '20px',
-                        height: '20px',
+                      <strong>{selectedCustomer.name}</strong>
+                      {selectedCustomer.phone && ` • ${selectedCustomer.phone}`}
+                    </div>
+                  )}
+                </Col>
+
+                {/* Business Type & Branch */}
+                <Col xs={24} lg={10}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <Text strong style={{ fontSize: '13px', color: '#8b4513' }}>
+                      <ShopOutlined /> Type & Branch
+                    </Text>
+                  </div>
+                  <Radio.Group
+                    value={businessType}
+                    onChange={(e) => setBusinessType(e.target.value)}
+                    buttonStyle="solid"
+                    disabled={!selectedCustomer}
+                    style={{ width: '100%', marginBottom: '8px', display: 'flex' }}
+                    size="small"
+                  >
+                    <Radio.Button
+                      value="retail"
+                      style={{
+                        width: '50%',
+                        textAlign: 'center',
+                        fontSize: '12px',
+                        height: '28px',
+                        lineHeight: '26px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '12px'
-                      }}>✓</span>
-                      <span>
-                        Customer selected: <strong>{selectedCustomer.name}</strong>
-                        {selectedCustomer.phone && ` • ${selectedCustomer.phone}`}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </Card>
-
-              {/* STEP 2: Business Type Selection */}
-              <Card
-                title={
-                  <Space>
-                    <span style={{
-                      background: selectedCustomer
-                        ? 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)'
-                        : 'linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%)',
-                      color: selectedCustomer ? 'white' : '#8c8c8c',
-                      borderRadius: '50%',
-                      width: '32px',
-                      height: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                      boxShadow: selectedCustomer ? '0 4px 12px rgba(0,0,0,0.15)' : 'none'
-                    }}>
-                      2
-                    </span>
-                    <span style={{
-                      color: selectedCustomer ? 'inherit' : '#8c8c8c',
-                      fontSize: '16px',
-                      fontWeight: '600'
-                    }}>
-                      STEP 2: Business Type & Location
-                    </span>
-                  </Space>
-                }
-                size="small"
-                style={{
-                  borderColor: selectedCustomer ? '#8b4513' : '#d9d9d9',
-                  borderWidth: '2px',
-                  borderRadius: '12px',
-                  boxShadow: selectedCustomer ? '0 4px 20px rgba(0,0,0,0.08)' : 'none',
-                  background: selectedCustomer ? 'rgba(255,255,255,0.95)' : 'rgba(249,249,249,0.95)',
-                  backdropFilter: 'blur(10px)',
-                  opacity: selectedCustomer ? 1 : 0.7,
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedCustomer) {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedCustomer) {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08)';
-                  }
-                }}
-                bodyStyle={{ padding: '20px' }}
-              >
-                <Row gutter={16} align="middle">
-                  <Col span={12}>
-                    <div style={{ marginBottom: '8px' }}>
-                      <Text strong style={{ fontSize: '14px', display: 'block', marginBottom: '4px' }}>
-                        🏪 Business Type:
-                      </Text>
-                      <Radio.Group
-                        value={businessType}
-                        onChange={(e) => setBusinessType(e.target.value)}
-                        buttonStyle="solid"
-                        size="large"
-                        disabled={!selectedCustomer}
-                        style={{ width: '100%' }}
-                      >
-                        <Radio.Button value="retail" style={{
-                          width: '50%',
-                          textAlign: 'center',
-                          height: '40px',
-                          borderRadius: '6px 0 0 6px',
-                          fontWeight: '500',
-                          boxShadow: businessType === 'retail' ? '0 2px 8px rgba(24, 144, 255, 0.3)' : 'none'
-                        }}>
-                          <ShopOutlined /> Retail
-                        </Radio.Button>
-                        <Radio.Button value="wholesale" style={{
-                          width: '50%',
-                          textAlign: 'center',
-                          height: '40px',
-                          borderRadius: '0 6px 6px 0',
-                          fontWeight: '500',
-                          boxShadow: businessType === 'wholesale' ? '0 2px 8px rgba(250, 140, 22, 0.3)' : 'none'
-                        }}>
-                          <BankOutlined /> Wholesale
-                        </Radio.Button>
-                      </Radio.Group>
-                    </div>
-                  </Col>
-                  <Col span={12}>
-                    <div>
-                      <Text strong style={{ fontSize: '14px', display: 'block', marginBottom: '4px' }}>
-                        📍 Location:
-                      </Text>
-                      <Select
-                        value={selectedBranch}
-                        onChange={setSelectedBranch}
-                        style={{
-                          width: '100%',
-                          height: '40px'
-                        }}
-                        size="large"
-                        disabled={!selectedCustomer}
-                        loading={!locations.length}
-                        placeholder="📍 Select Location"
-                      >
-                        {locations.length > 0 ? (
-                          locations.map(location => (
-                            <Option key={location.id} value={location.id}>
-                              {location.displayName}
-                            </Option>
-                          ))
-                        ) : (
-                          <Option disabled>No locations available</Option>
-                        )}
-                      </Select>
-                    </div>
-                  </Col>
-                </Row>
-                {selectedCustomer && (
-                  <div style={{
-                    marginTop: '16px',
-                    padding: '16px',
-                    background: businessType === 'wholesale'
-                      ? 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)'
-                      : 'linear-gradient(135deg, #f0f5ff 0%, #d6e4ff 100%)',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    border: businessType === 'wholesale' ? '1px solid #ffd591' : '1px solid #adc6ff'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{
-                        background: businessType === 'wholesale' ? '#fa8c16' : '#1890ff',
-                        color: 'white',
-                        borderRadius: '50%',
-                        width: '20px',
-                        height: '20px',
+                        padding: '0 8px'
+                      }}
+                    >
+                      <ShopOutlined style={{ fontSize: '12px', marginRight: '4px' }} /> Retail
+                    </Radio.Button>
+                    <Radio.Button
+                      value="wholesale"
+                      style={{
+                        width: '50%',
+                        textAlign: 'center',
+                        fontSize: '12px',
+                        height: '28px',
+                        lineHeight: '26px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '12px'
-                      }}>📊</span>
-                      <span>
-                        Selected: <strong>{businessType === 'retail' ? '🛍️ Retail Pricing' : '🏪 Wholesale Pricing'}</strong>
-                        {businessType === 'wholesale' && (
-                          <div style={{ fontSize: '12px', color: '#fa8c16', marginTop: '4px' }}>
-                            💡 5% additional discount on orders above ₹10,000
-                          </div>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </Card>
+                        padding: '0 8px'
+                      }}
+                    >
+                      <BankOutlined style={{ fontSize: '12px', marginRight: '4px' }} /> Wholesale
+                    </Radio.Button>
+                  </Radio.Group>
+                  <Select
+                    value={selectedBranch}
+                    onChange={setSelectedBranch}
+                    style={{
+                      width: '100%',
+                      fontSize: '13px'
+                    }}
+                    disabled={!selectedCustomer}
+                    loading={!locations.length}
+                    placeholder="Branch/Stall"
+                    size="small"
+                  >
+                    {locations.length > 0 ? (
+                      locations.map(location => (
+                        <Option key={location.id} value={location.id}>
+                          {location.displayName}
+                        </Option>
+                      ))
+                    ) : (
+                      <Option disabled>No locations</Option>
+                    )}
+                  </Select>
+                </Col>
+              </Row>
+            </Card>
 
-              {/* STEP 3: Product Selection */}
-              <Card
+            {/* Product Selection */}
+            <Card
                 title={
                   <Space>
-                    <span style={{
-                      background: (selectedCustomer && cart.length > 0)
-                        ? 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)'
-                        : selectedCustomer
-                        ? 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)'
-                        : 'linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%)',
-                      color: selectedCustomer ? 'white' : '#8c8c8c',
-                      borderRadius: '50%',
-                      width: '32px',
-                      height: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                      boxShadow: selectedCustomer ? '0 4px 12px rgba(0,0,0,0.15)' : 'none'
-                    }}>
-                      {(selectedCustomer && cart.length > 0) ? '✓' : '3'}
-                    </span>
-                    <span style={{
-                      color: selectedCustomer ? 'inherit' : '#8c8c8c',
-                      fontSize: '16px',
-                      fontWeight: '600'
-                    }}>
-                      STEP 3: Product Selection
+                    <ShoppingCartOutlined style={{ fontSize: '18px', color: '#8b4513' }} />
+                    <span style={{ fontSize: '16px', fontWeight: '600' }}>
+                      Select Products
                     </span>
                     {cart.length > 0 && (
                       <Badge
@@ -974,14 +673,14 @@ const Billing = () => {
                 style={{
                   borderColor: (selectedCustomer && cart.length > 0) ? '#52c41a' : (selectedCustomer ? '#8b4513' : '#d9d9d9'),
                   borderWidth: '2px',
-                  borderRadius: '12px',
-                  boxShadow: selectedCustomer ? '0 4px 20px rgba(0,0,0,0.08)' : 'none',
-                  background: selectedCustomer ? 'rgba(255,255,255,0.95)' : 'rgba(249,249,249,0.95)',
-                  backdropFilter: 'blur(10px)',
-                  opacity: selectedCustomer ? 1 : 0.7,
-                  flex: 1
+                  borderRadius: '8px',
+                  boxShadow: selectedCustomer ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  background: selectedCustomer ? '#fff' : '#fafafa',
+                  opacity: selectedCustomer ? 1 : 0.6,
+                  height: 'calc(100vh - 300px)',
+                  minHeight: '550px'
                 }}
-                bodyStyle={{ padding: '20px', height: 'calc(100% - 56px)', overflow: 'auto' }}
+                bodyStyle={{ padding: '16px', height: 'calc(100% - 48px)', overflow: 'auto' }}
                 extra={
                   selectedCustomer && cart.length > 0 && (
                     <Popconfirm
@@ -1031,40 +730,19 @@ const Billing = () => {
                   </>
                 )}
               </Card>
-            </div>
           </Col>
 
-          {/* Right Column - Advanced Options & Summary */}
-          <Col xs={24} lg={10}>
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Right Column - Payment & Summary */}
+          <Col xs={24} lg={8}>
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-              {/* STEP 4: Advance Payment Options */}
+              {/* Advance Payment Options */}
               <Card
                 title={
                   <Space>
-                    <span style={{
-                      background: (selectedCustomer && cart.length > 0)
-                        ? 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)'
-                        : 'linear-gradient(135deg, #d9d9d9 0%, #bfbfbf 100%)',
-                      color: (selectedCustomer && cart.length > 0) ? 'white' : '#8c8c8c',
-                      borderRadius: '50%',
-                      width: '32px',
-                      height: '32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                      boxShadow: (selectedCustomer && cart.length > 0) ? '0 4px 12px rgba(0,0,0,0.15)' : 'none'
-                    }}>
-                      4
-                    </span>
-                    <span style={{
-                      color: (selectedCustomer && cart.length > 0) ? 'inherit' : '#8c8c8c',
-                      fontSize: '16px',
-                      fontWeight: '600'
-                    }}>
-                      STEP 4: Payment Options
+                    <PayCircleOutlined style={{ fontSize: '15px', color: '#8b4513' }} />
+                    <span style={{ fontSize: '14px', fontWeight: '600' }}>
+                      Payment Options
                     </span>
                   </Space>
                 }
@@ -1072,15 +750,14 @@ const Billing = () => {
                 style={{
                   borderColor: (selectedCustomer && cart.length > 0) ? '#8b4513' : '#d9d9d9',
                   borderWidth: '2px',
-                  borderRadius: '12px',
-                  boxShadow: (selectedCustomer && cart.length > 0) ? '0 4px 20px rgba(0,0,0,0.08)' : 'none',
-                  background: (selectedCustomer && cart.length > 0) ? 'rgba(255,255,255,0.95)' : 'rgba(249,249,249,0.95)',
-                  backdropFilter: 'blur(10px)',
-                  opacity: (selectedCustomer && cart.length > 0) ? 1 : 0.7
+                  borderRadius: '8px',
+                  boxShadow: (selectedCustomer && cart.length > 0) ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  background: (selectedCustomer && cart.length > 0) ? '#fff' : '#fafafa',
+                  opacity: (selectedCustomer && cart.length > 0) ? 1 : 0.6
                 }}
-                bodyStyle={{ padding: '20px' }}
+                bodyStyle={{ padding: '12px' }}
               >
-                <div style={{ marginBottom: '12px' }}>
+                <div style={{ marginBottom: '10px' }}>
                   <Space>
                     <Switch
                       checked={isAdvanceBilling}
@@ -1088,12 +765,12 @@ const Billing = () => {
                       size="small"
                       disabled={!(selectedCustomer && cart.length > 0)}
                     />
-                    <Text style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                      <PayCircleOutlined /> Enable Advance Payment
+                    <Text style={{ fontSize: '13px', fontWeight: '600' }}>
+                      Enable Advance Payment
                     </Text>
                   </Space>
-                  <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                    Allow customer to pay partially now and remaining later
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: '3px', marginLeft: '24px' }}>
+                    Pay partially now, remaining later
                   </div>
                 </div>
 
@@ -1131,11 +808,12 @@ const Billing = () => {
         businessType={businessType}
       />
       
-      <CustomerModal 
+      <CustomerModal
         visible={showCustomerModal}
         onCancel={handleCloseCustomerModal}
         onAddCustomer={handleAddDynamicCustomer}
         form={customerForm}
+        phoneNumber={newCustomerPhone}
       />
       
       <PriceEditModal 
@@ -1145,8 +823,7 @@ const Billing = () => {
         editingItem={editingItem}
         newPrice={newPrice}
         onNewPriceChange={setNewPrice}
-      />
-      
+      /> 
       <PaymentModal 
         visible={showPaymentModal}
         onCancel={handleClosePaymentModal}

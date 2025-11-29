@@ -114,12 +114,20 @@ export const ProductModal = ({
   );
 };
 
-export const CustomerModal = ({ 
-  visible, 
-  onCancel, 
-  onAddCustomer, 
-  form 
+export const CustomerModal = ({
+  visible,
+  onCancel,
+  onAddCustomer,
+  form,
+  phoneNumber
 }) => {
+  // Pre-fill phone number when modal opens
+  React.useEffect(() => {
+    if (visible && phoneNumber) {
+      form.setFieldsValue({ phone: phoneNumber });
+    }
+  }, [visible, phoneNumber, form]);
+
   return (
     <Modal
       title="Add New Customer"
@@ -135,19 +143,28 @@ export const CustomerModal = ({
           label="Customer Name"
           rules={[{ required: true, message: 'Enter customer name' }]}
         >
-          <Input placeholder="Enter customer name" />
+          <Input placeholder="Enter customer name" autoFocus />
         </Form.Item>
-        
+
         <Form.Item
           name="phone"
           label="Phone Number"
           rules={[
             { pattern: /^[6-9]\d{9}$/, message: 'Enter valid 10-digit phone number' }
           ]}
+          initialValue={phoneNumber}
         >
-          <Input placeholder="Enter phone number (optional)" maxLength={10} />
+          <Input
+            placeholder="Enter phone number"
+            maxLength={10}
+            disabled={!!phoneNumber}
+            style={{
+              backgroundColor: phoneNumber ? '#f5f5f5' : 'white',
+              color: phoneNumber ? '#000' : undefined
+            }}
+          />
         </Form.Item>
-        
+
         <Form.Item
           name="email"
           label="Email Address"
@@ -157,7 +174,7 @@ export const CustomerModal = ({
         >
           <Input placeholder="Enter email address (optional)" />
         </Form.Item>
-        
+
         <Form.Item>
           <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
             <Button onClick={onCancel}>

@@ -96,7 +96,7 @@ export const fetchEstimates = createAsyncThunk(
         // Check if estimate is expired (3 months)
         const expiryDate = moment(estimate.createdAt?.toDate ? estimate.createdAt.toDate() : estimate.createdAt).add(3, 'months');
         enrichedEstimate.isExpired = moment().isAfter(expiryDate);
-        enrichedEstimate.expiryDate = expiryDate.toDate();
+        enrichedEstimate.expiryDate = expiryDate.toISOString(); // Store as ISO string for Redux serialization
         enrichedEstimate.daysToExpiry = expiryDate.diff(moment(), 'days');
 
         return enrichedEstimate;
@@ -219,7 +219,7 @@ export const createEstimate = createAsyncThunk(
         
         // Validity (3 months)
         validityDays: 90,
-        expiryDate: moment().add(3, 'months').toDate(),
+        expiryDate: moment().add(3, 'months').toISOString(), // Store as ISO string for Redux serialization
         
         // Status
         status: 'active',
@@ -278,7 +278,7 @@ export const getEstimate = createAsyncThunk(
       // Check validity
       const expiryDate = moment(estimate.createdAt?.toDate ? estimate.createdAt.toDate() : estimate.createdAt).add(3, 'months');
       estimate.isExpired = moment().isAfter(expiryDate);
-      estimate.expiryDate = expiryDate.toDate();
+      estimate.expiryDate = expiryDate.toISOString(); // Store as ISO string for Redux serialization
       estimate.daysToExpiry = expiryDate.diff(moment(), 'days');
 
       return estimate;

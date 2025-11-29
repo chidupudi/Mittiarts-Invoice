@@ -53,6 +53,7 @@ import {
 import { fetchOrders } from '../../features/order/orderSlice';
 import { fetchProducts } from '../../features/products/productSlice';
 import { fetchCustomers } from '../../features/customer/customerSlice';
+import { fetchBranches, fetchStalls } from '../../features/storefront/storefrontSlice';
 import firebaseService from '../../services/firebaseService';
 
 import moment from 'moment';
@@ -108,6 +109,7 @@ const Dashboard = () => {
   const { items: orders = [], loading: ordersLoading } = useSelector(state => state.orders);
   const { items: products = [], loading: productsLoading } = useSelector(state => state.products);
   const { items: customers = [], loading: customersLoading } = useSelector(state => state.customers);
+  const { branches = [], stalls = [] } = useSelector(state => state.storefront);
 
   // Admin analytics state
   const [businessAnalytics, setBusinessAnalytics] = useState(null);
@@ -115,6 +117,7 @@ const Dashboard = () => {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const [dateFilter, setDateFilter] = useState('week'); // week, 2weeks, month
+  const [branchFilter, setBranchFilter] = useState('all'); // all, specific branch ID
   const [dashboardData, setDashboardData] = useState({
     totalSales: 0,
     totalOrders: 0,
@@ -137,6 +140,8 @@ const Dashboard = () => {
     dispatch(fetchOrders({}));
     dispatch(fetchProducts({}));
     dispatch(fetchCustomers({}));
+    dispatch(fetchBranches({}));
+    dispatch(fetchStalls({}));
 
     // Check if user is admin and load business analytics
     loadAdminAnalytics();
@@ -167,7 +172,7 @@ const Dashboard = () => {
     if (orders.length || products.length || customers.length) {
       calculateDashboardData();
     }
-  }, [orders, products, customers, dateFilter]);
+  }, [orders, products, customers, dateFilter, branchFilter, branches, stalls]);
 
   const getDateRange = () => {
     const now = moment();
@@ -192,12 +197,18 @@ const Dashboard = () => {
 
   const calculateDashboardData = () => {
     const { startDate, endDate } = getDateRange();
-    
-    // Filter orders for the selected period
+
+    // Filter orders for the selected period and branch
     const filteredOrders = orders.filter(order => {
       if (order.status === 'cancelled') return false;
       const orderDate = moment(order.createdAt?.toDate?.() || order.createdAt);
-      return orderDate.isBetween(startDate, endDate, null, '[]');
+      const dateMatch = orderDate.isBetween(startDate, endDate, null, '[]');
+
+      // Branch filter
+      if (branchFilter !== 'all') {
+        return dateMatch && order.branch === branchFilter;
+      }
+      return dateMatch;
     });
 
     // Calculate total sales and orders
@@ -406,11 +417,26 @@ const Dashboard = () => {
   };
 
   const getBranchName = (branchId) => {
+    if (!branchId) return 'Unknown Branch';
+
+    // First check if it's in branchInfo (new orders)
+    // This handles orders that store full branch information
+
+    // Check in branches
+    const branch = branches.find(b => b.id === branchId);
+    if (branch) return branch.name;
+
+    // Check in stalls
+    const stall = stalls.find(s => s.id === branchId);
+    if (stall) return stall.name;
+
+    // Fallback for old hardcoded branches
     const branchNames = {
       'main_showroom': 'Main Showroom',
       'pottery_workshop': 'Pottery Workshop',
       'export_unit': 'Export Unit'
     };
+
     return branchNames[branchId] || 'Unknown Branch';
   };
 
@@ -447,11 +473,15 @@ const Dashboard = () => {
       title: 'Branch',
       dataIndex: 'branch',
       key: 'branch',
-      render: (branch) => (
-        <Tag color="#8b4513">
-          {getBranchName(branch)}
-        </Tag>
-      )
+      render: (branch, record) => {
+        // Try to get branch name from branchInfo first (new orders), then fall back to branch ID lookup
+        const branchName = record.branchInfo?.name || getBranchName(branch);
+        return (
+          <Tag color="#8b4513">
+            {branchName}
+          </Tag>
+        );
+      }
     },
     {
       title: 'Date',
@@ -543,6 +573,29 @@ const Dashboard = () => {
               <Option value="week">1 Week</Option>
               <Option value="2weeks">2 Weeks</Option>
               <Option value="month">1 Month</Option>
+            </Select>
+          </div>
+
+          <div>
+            <Text style={{ color: 'rgba(255,255,255,0.8)' }}>Branch/Location:</Text>
+            <br />
+            <Select
+              value={branchFilter}
+              onChange={setBranchFilter}
+              style={{ width: 180 }}
+              loading={!branches.length && !stalls.length}
+            >
+              <Option value="all">All Locations</Option>
+              {branches.map(branch => (
+                <Option key={branch.id} value={branch.id}>
+                  🏪 {branch.name}
+                </Option>
+              ))}
+              {stalls.map(stall => (
+                <Option key={stall.id} value={stall.id}>
+                  🎪 {stall.name}
+                </Option>
+              ))}
             </Select>
           </div>
         </div>

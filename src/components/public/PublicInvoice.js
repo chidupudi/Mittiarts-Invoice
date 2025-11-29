@@ -14,8 +14,8 @@ import {
   Result,
   message
 } from 'antd';
-import { 
-  DownloadOutlined, 
+import {
+  DownloadOutlined,
   CheckCircleOutlined,
   PhoneOutlined,
   PrinterOutlined,
@@ -26,6 +26,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import moment from 'moment';
 import firebaseService from '../../services/firebaseService';
+import mittiArtsLogo from '../../image.png';
 
 const { Title, Text } = Typography;
 
@@ -43,17 +44,42 @@ const MAIN_STORE_INFO = {
 
 const invoiceStyles = `
   @media print {
-    body { margin: 0; }
+    body {
+      margin: 0;
+      padding: 0;
+    }
     .no-print { display: none !important; }
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+    .invoice-container {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      min-height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      page-break-after: avoid;
+      page-break-inside: avoid;
+    }
+    html, body {
+      height: auto;
+      overflow: visible;
+    }
   }
-  
+
   .invoice-container {
-    max-width: 800px;
+    width: 210mm;
+    min-height: 297mm;
+    max-width: 210mm;
     margin: 0 auto;
     background: white;
     border: 2px solid #000;
     font-family: Arial, sans-serif;
     font-size: 12px;
+    box-sizing: border-box;
   }
   
   .invoice-header {
@@ -100,36 +126,23 @@ const invoiceStyles = `
     font-size: 16px;
   }
   
-  .gstin-section {
-    text-align: center;
-    padding: 5px;
-    border-bottom: 1px solid #000;
-    font-weight: bold;
-  }
-  
-  .invoice-info {
+  .customer-info-row {
     display: flex;
-    padding: 10px;
+    justify-content: space-between;
+    padding: 10px 15px;
     border-bottom: 1px solid #000;
+    font-size: 12px;
   }
-  
-  .invoice-details {
-    flex: 1;
-    border-right: 1px solid #000;
-    padding-right: 10px;
-  }
-  
-  .customer-details {
-    flex: 1;
-    padding-left: 10px;
-  }
-  
-  .customer-section {
-    padding: 10px;
+
+  .invoice-numbers-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 15px;
     border-bottom: 1px solid #000;
-    text-align: right;
+    background-color: #f9f9f9;
+    font-size: 11px;
   }
-  
+
   .advance-alert {
     padding: 10px;
     background-color: #fff7e6;
@@ -142,7 +155,7 @@ const invoiceStyles = `
     width: 100%;
     border-collapse: collapse;
   }
-  
+
   .items-table th,
   .items-table td {
     border: 1px solid #000;
@@ -150,19 +163,69 @@ const invoiceStyles = `
     text-align: left;
     font-size: 11px;
   }
-  
+
   .items-table th {
     background-color: #f0f0f0;
     font-weight: bold;
     text-align: center;
   }
-  
+
+  .items-table tbody tr {
+    height: 35px;
+  }
+
+  .items-table-wrapper {
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  @media print {
+    .items-table-wrapper {
+      min-height: auto !important;
+      max-height: 400px !important;
+      page-break-inside: avoid;
+    }
+    .white-space-after-items {
+      min-height: 30px !important;
+      max-height: 150px !important;
+      flex-grow: 0 !important;
+      page-break-inside: avoid;
+    }
+    .totals-section {
+      page-break-inside: avoid;
+    }
+    .signature-section {
+      page-break-inside: avoid;
+      padding: 15px !important;
+    }
+    .footer {
+      page-break-inside: avoid;
+    }
+    .invoice-header {
+      page-break-after: avoid;
+    }
+  }
+
+  .items-table {
+    flex-shrink: 0;
+  }
+
+  .white-space-after-items {
+    flex-grow: 1;
+    min-height: 100px;
+    border-left: 1px solid #000;
+    border-right: 1px solid #000;
+    border-bottom: 1px solid #000;
+  }
+
   .text-center { text-align: center; }
   .text-right { text-align: right; }
-  
+
   .totals-section {
     display: flex;
     min-height: 100px;
+    border-top: none;
   }
   
   .amount-words {
@@ -545,16 +608,11 @@ const PublicInvoice = () => {
           <div className="invoice-header">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
               <div className="logo-container">
-                <img 
-                  src={MAIN_STORE_INFO.logo} 
-                  alt="Mitti Arts Logo" 
+                <img
+                  src={mittiArtsLogo}
+                  alt="Mitti Arts Logo"
                   className="logo-image"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
                 />
-                <div style={{ display: 'none', fontSize: '24px', color: '#8b4513' }}>🏺</div>
               </div>
               <div>
                 <div className="company-name">{MAIN_STORE_INFO.name}</div>
@@ -572,44 +630,23 @@ const PublicInvoice = () => {
             </div>
           </div>
 
-          {/* TAX INVOICE Title */}
+          
           <div className="invoice-title">
-            TAX INVOICE
+            Receipt
           </div>
 
-          {/* GSTIN */}
-          <div className="gstin-section">
-            GSTIN: {MAIN_STORE_INFO.gstin}
+          {/* Customer Info Row - Name, Phone, Date */}
+          <div className="customer-info-row">
+            <div><strong>Name:</strong> {order.customer?.name || 'Walk-in Customer'}</div>
+            <div><strong>Phone:</strong> {order.customer?.phone || 'N/A'}</div>
+            <div><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
           </div>
 
-          {/* Invoice Details Section */}
-          <div className="invoice-info">
-            <div className="invoice-details">
-              <div><strong>P.O. No.</strong></div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
-            </div>
-            <div style={{ flex: 1, borderRight: '1px solid #000', borderLeft: '1px solid #000', paddingLeft: '10px', paddingRight: '10px' }}>
-              <div><strong>DC No.</strong></div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong></div>
-            </div>
-            <div className="customer-details">
-              <div><strong>Invoice No.</strong> {order.orderNumber}</div>
-              <div style={{ marginTop: '15px' }}><strong>Date:</strong> {moment(order.createdAt?.toDate?.() || order.createdAt).format('DD/MM/YYYY')}</div>
-            </div>
-          </div>
-
-          {/* Customer Details */}
-          <div className="customer-section">
-            <div><strong>M/s. {order.customer?.name || 'Walk-in Customer'}</strong></div>
-            {order.customer?.phone && (
-              <div style={{ marginTop: '5px' }}>Ph: {order.customer.phone}</div>
-            )}
-            {order.customer?.email && (
-              <div style={{ marginTop: '5px' }}>Email: {order.customer.email}</div>
-            )}
-            <div style={{ marginTop: '10px' }}>
-              <strong>GSTIN: ________________________________</strong>
-            </div>
+          {/* Invoice Numbers Row */}
+          <div className="invoice-numbers-row">
+            <div><strong>Invoice No:</strong> {order.orderNumber}</div>
+            <div><strong>Order ID:</strong> {order.id}</div>
+            <div><strong>Invoice ID:</strong> {order.invoiceId || order.id}</div>
           </div>
 
           {/* Advance Payment Alert */}
@@ -621,42 +658,33 @@ const PublicInvoice = () => {
             </div>
           )}
 
-          {/* Items Table */}
-          <table className="items-table">
-            <thead>
-              <tr>
-                <th style={{ width: '50px' }}>S.No</th>
-                <th style={{ width: '80px' }}>HSN Code</th>
-                <th>DESCRIPTION</th>
-                <th style={{ width: '80px' }}>QTY.</th>
-                <th style={{ width: '100px' }}>RATE</th>
-                <th style={{ width: '120px' }}>AMOUNT Rs.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.items.map((item, index) => (
-                <tr key={index}>
-                  <td className="text-center">{index + 1}</td>
-                  <td className="text-center">-</td>
-                  <td>{item.product?.name || 'Product'}</td>
-                  <td className="text-center">{item.quantity}</td>
-                  <td className="text-right">₹{item.price.toFixed(2)}</td>
-                  <td className="text-right">₹{(item.price * item.quantity).toFixed(2)}</td>
+          {/* Items Table with flexible spacing */}
+          <div className="items-table-wrapper">
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '50px' }}>S.No</th>
+                  <th>DESCRIPTION</th>
+                  <th style={{ width: '80px' }}>QTY.</th>
+                  <th style={{ width: '100px' }}>RATE</th>
+                  <th style={{ width: '120px' }}>AMOUNT Rs.</th>
                 </tr>
-              ))}
-              {/* Empty rows for padding */}
-              {Array.from({ length: Math.max(0, 10 - order.items.length) }).map((_, index) => (
-                <tr key={`empty-${index}`} style={{ height: '30px' }}>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                  <td>&nbsp;</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {order.items.map((item, index) => (
+                  <tr key={index}>
+                    <td className="text-center">{index + 1}</td>
+                    <td>{item.product?.name || 'Product'}</td>
+                    <td className="text-center">{item.quantity}</td>
+                    <td className="text-right">₹{item.price.toFixed(2)}</td>
+                    <td className="text-right">₹{(item.price * item.quantity).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* Flexible white space after items */}
+            <div className="white-space-after-items"></div>
+          </div>
 
           {/* Totals Section */}
           <div className="totals-section">
@@ -693,10 +721,12 @@ const PublicInvoice = () => {
               <strong>For {MAIN_STORE_INFO.name}</strong>
             </div>
             <div>
-              <strong>Authorised Signatory</strong>
+              <strong>Govardhan Gundala</strong>
+            </div>
+            <div style={{ marginTop: '5px', fontSize: '11px' }}>
+              Authorised Signatory
             </div>
           </div>
-
           {/* Footer */}
           <div className="footer">
             <div className="qr-container">
